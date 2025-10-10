@@ -20,6 +20,7 @@
 #' @param trControl Parameters for controlling the training process (from the \code{'caret'} package).
 #' @param methods A \code{list} of selected machine learning models and their hyperparameters.
 #' @param metric A \code{string} specifying the summary metric for classification to select the optimal model. Default includes \code{"Balanced_accuracy"} due to (normally) unbalanced data.
+#' @param importance_method A \code{string} specifying the method to determine the relative importance of variables. Default includes \code{"SHAP"}.
 #' @param hold_out A \code{number} value (5-20) for validation data percentage during training (default: 0.2).
 #' @param convexity A \code{logical} value indicating if a convex technology is assumed.
 #' @param returns Type of returns to scale.
@@ -36,8 +37,8 @@
 
 efficiency_estimation <- function (
     data, x, y, RTS, trControl, methods,
-    metric, hold_out, balance_data = 0,
-    scenarios = 0.75, convexity = TRUE, returns = "variable"
+    metric, importance_method, hold_out, balance_data = 0,
+    scenarios = 0.75
     ) {
 
   # ----------------------------------------------------------------------------
@@ -99,6 +100,62 @@ efficiency_estimation <- function (
   # Step 3: ML model training --------------------------------------------------
   # ----------------------------------------------------------------------------
 
+  # metrics for model evaluation
+  MySummary <- function(data, lev = NULL, model = NULL) {
+
+    data$pred <- factor(data$pred, levels = lev)
+    data$obs  <- factor(data$obs,  levels = lev)
+
+    cm <- caret::confusionMatrix(
+      data = data$pred,
+      reference = data$obs,
+      positive = "efficient"
+    )
+
+    # ROC-AUC
+    roc_obj <- pROC::roc(
+      response = data$obs,
+      predictor = data$efficient,
+      levels = rev(lev), # primero el negativo
+      direction = "<",
+      quiet = TRUE)
+
+    # PR-AUC
+    ppos <- data[["efficient"]]
+
+    pr_obj <- PRROC::pr.curve(
+      scores.class0 = data[["efficient"]] [data$obs == "efficient"],
+      scores.class1 = data[["efficient"]] [data$obs == "not_efficient"],
+      curve = TRUE
+    )
+
+    # Entropy/Calibration metrics
+
+    eps <- 1e-15
+    y <- as.integer(data$obs == "efficient")
+
+    pcl <- pmin(pmax(data[["efficient"]], eps), 1 - eps)
+    LogLoss <- -mean(y * log(pcl) + (1 - y) * log(1 - pcl))
+    # PredEntropy_bits <- -mean(pcl * log2(pcl) + (1 - pcl) * log2(1 - pcl))
+    # Brier <- mean((pcl - y)^2)
+
+    out <- c(
+      cm$overall[c("Accuracy", "Kappa")],
+      cm$byClass[c("Recall", "Specificity",
+                   "Precision", "F1",
+                   "Balanced Accuracy")],
+      "ROC" = roc_obj$auc,
+      "PR-AUC" = unname(pr_obj$auc.integral),
+      "LogLoss" = LogLoss
+      # "PredEntropy_bits" = PredEntropy_bits,
+      # "Brier" = Brier
+    )
+
+    return(out)
+  }
+
+  trControl$summaryFunction <- MySummary
+
     # --------------------------------------------------------------------------
     # Step 3.1: Addressing imbalance rate --------------------------------------
     # --------------------------------------------------------------------------
@@ -137,7 +194,7 @@ efficiency_estimation <- function (
   names(performance_train_all) <- names(methods)
 
   for (key in names(methods)) {
-
+message(paste0("Training ", key, " method."))
     m <- methods[[key]]
 
     # save best model if the new if better
@@ -147,6 +204,7 @@ efficiency_estimation <- function (
     performance_train <- NULL
 
     for (dataset in names(datasets_to_train)) {
+      message(paste0("Testing with ", dataset, " imbalance rate"))
 
       # entrenar
       args <- list(
@@ -174,6 +232,10 @@ efficiency_estimation <- function (
       # index
       idx <- Reduce(`&`, lapply(pns, function(p) res[[p]] == bt[[p]]))
       best_row <- res[idx, , drop = FALSE]
+      imb_rate_df <- data.frame(
+        imbalance_rate = dataset
+      )
+      best_row <- cbind(imb_rate_df, best_row)
 
       performance_train <- rbind(performance_train, best_row)
 
@@ -270,461 +332,486 @@ efficiency_estimation <- function (
 
   }
 
-  # select the best model by metric
-  save_performance <- save_performance %>%
-    arrange(desc(metric))
-
   # ----------------------------------------------------------------------------
   # Train the final model ------------------------------------------------------
   # ----------------------------------------------------------------------------
 
-  final_method <- save_performance[1,1]
+  # sort by metric
+  save_performance <- save_performance %>%
+    dplyr::arrange(dplyr::desc(.data[[metric]]))
+
+  # name best method
+  final_method <- as.character(save_performance$data[1])
+
+  # names hyparameters
   final_hyparams <- best_models[[final_method]][["bestTune"]]
+  final_hyparams <- as.data.frame(final_hyparams)  # asegurar data.frame
+
+  # best imbalance rate
   final_imbalance_rate <- save_performance[1, "imbalance_rate"]
 
-  m <- methods[[final_method]]
-  m$model$grid <- final_hyparams
-  browser()
-  # entrenar
-  args <- list(
-    form = class_efficiency ~ .,
-    data = datasets_to_train[[final_imbalance_rate]],
-    method = m$model,
-    metric = metric,
-    trControl = trainControl(method = "none", classProbs = TRUE)
-  )
+  # final dataset
+  if (is.null(hold_out)) {
 
-  set.seed(seed)
-  ml_model <- do.call(caret::train, args)
+    # use the balanced dataset
+    full_data_for_training <- train_data_SMOTE[[final_imbalance_rate]]
 
+  } else {
 
+    # use train + validation set, need to balanced
+    full_data_for_training <- SMOTE_data(
+      data = all_data,
+      x = x,
+      y = y,
+      RTS = RTS,
+      balance_data = as.numeric(final_imbalance_rate)
+    )[[final_imbalance_rate]]
 
-  # # ============================== #
-  # # detecting importance variables #
-  # # ============================== #
-  #
-  # # necesary data to calculate importance in rminer
-  # train_data <- final_model[["trainingData"]]
-  # names(train_data)[1] <- "ClassEfficiency"
-  #
-  # if(!(is.null(z))) {
-  #
-  #   dataset_dummy <- dummy_cols(train_data,  select_columns = c(names(train_data))[z+1]) %>%
-  #     select(-c(names(train_data))[z+1])
-  #
-  #   train_data <- dataset_dummy
-  #
-  #
-  #   to_factor <- c((x+y+1):ncol(train_data))
-  #   train_data <- change_class(train_data, to_factor = to_factor)
-  #
-  # } else {
-  #
-  #   train_data <- train_data[,c(2:length(train_data),1)]
-  #
-  # }
-  #
-  # # importance with our model of Caret
-  # mypred <- function(M, data) {
-  #   return (predict(M, data[-length(data)], type = "prob"))
-  # }
-  #
-  # # Define methods and measures
-  # methods_SA <- c("1D-SA") # c("1D-SA", "sens", "DSA", "MSA", "CSA", "GSA")
-  # measures_SA <- c("AAD") #  c("AAD", "gradient", "variance", "range")
-  #
-  # levels <- 7
-  #
-  # if (names(methods)[i] == "nnet") {
-  #   # with rminer
-  #   m <- rminer::fit(
-  #     ClassEfficiency ~.,
-  #     data = train_data,
-  #     model = "mlp",
-  #     scale = "none",
-  #     size = final_model$bestTune$size,
-  #     decay = final_model$bestTune$decay
-  #     #entropy = FALSE
-  #     #softmax = TRUE
-  #   )
-  #
-  #   # Calculate the importance for the current method and measure
-  #   importance <- Importance(
-  #     M = m,
-  #     RealL = levels, # Levels
-  #     data = train_data,
-  #     method = methods_SA,
-  #     measure = measures_SA,
-  #     baseline = "mean", # mean, median, with the baseline example (should have the same attribute names as data).
-  #     responses = TRUE
-  #
-  #   )
-  #
-  # } else {
-  #   # Calculate the importance for the current method and measure
-  #   importance <- Importance(
-  #     M = final_model$final_model$finalModel,
-  #     RealL = levels, # Levels
-  #     data = train_data, # data
-  #     method = methods_SA,
-  #     measure = measures_SA,
-  #     baseline = "mean", # mean, median, with the baseline example (should have the same attribute names as data).
-  #     responses = TRUE,
-  #     PRED = mypred,
-  #     outindex = length(train_data) # length(train_data)
-  #   )
-  # }
-  #
-  # result_SA <- as.data.frame(t((round(importance$imp, 3))))[, -length(importance$imp)]
-  # rownames(result_SA) <- NULL
-  # names(result_SA) <- names(train_data)[-length(train_data)]
-  #
-  # if (names(methods) == "nnet") {
-  #   final_model_p <- final_model
-  # } else {
-  #   final_model_p <- final_model$final_model
-  # }
-  #
-  # print(paste("Inputs importance: ", sum(result_SA[1:length(x)])))
-  # print(paste("Outputs importance: ", sum(result_SA[(length(x)+1):(length(x)+length(y))])))
-  # #print(paste("Environment importance: ", sum(result_SA[((length(x) + length(y))+1):length(result_SA)])))
-  # #print(paste("Seed: ", seed))
-  #
-  # # =========== #
-  # # get ranking #
-  # # =========== #
-  #
-  # if (nZ != 0) {
-  #   data_rank <- data_save[, c(x,y,z)]
-  #   data_rank <- as.data.frame(data_rank)
-  #   } else {
-  #   data_rank <- data_save[, c(x,y)]
-  #   data_rank <- as.data.frame(data_rank)
-  #   }
-  #
-  # eff_vector <- apply(data_rank, 1, function(row) {
-  #
-  #   row_df <- as.data.frame(t(row))
-  #
-  #   colnames(row_df) <- names(data_rank)
-  #
-  #   if (!(is.null(z))) {row_df <- change_class(data = row_df, to_numeric = c(x,y), to_factor = z)}
-  #
-  #   pred <- unlist(predict(final_model_p, row_df, type = "prob")[1])
-  #
-  #   return(pred)
-  # })
-  #
-  # eff_vector <- as.data.frame(eff_vector)
-  #
-  # id <- as.data.frame(c(1:nrow(data_save)))
-  # names(id) <- "id"
-  # eff_vector <- cbind(id, eff_vector)
-  #
-  # ranking_order <- eff_vector[order(eff_vector$eff_vector, decreasing = TRUE), ]
-  #
-  # # ============================= #
-  # # to get probabilities senarios #
-  # # ============================= #
-  #
-  # data_scenario_list <- list()
-  # metrics_list <- list()
-  # peer_list <- list()
-  # peer_weight_list <- list()
-  # na_count_list <- list()
-  # n_not_prob_list <- list()
-  #
-  # for (e in 1:length(scenarios)) {
-  #   print(paste("scenario: ", scenarios[e]))
-  #   print(final_model)
-  #
-  #   data_scenario <- compute_target (
-  #     data = data_save,
-  #     x = x,
-  #     y = y,
-  #     z = z,
-  #     final_model = final_model,
-  #     cut_off = scenarios[e],
-  #     imp_vector = result_SA
-  #   )
-  #
-  #   if(all(is.na(data_scenario$data_scenario))) {
-  #     print("all na")
-  #     browser()
-  #
-  #     # peer
-  #     peer_restult <- NA
-  #
-  #     # save_peer
-  #     peer_list[[e]] <- peer_restult
-  #
-  #     # main_metrics
-  #     main_metrics <- NA
-  #
-  #     # save main_metrics
-  #     metrics_list[[e]] <- main_metrics
-  #
-  #     print("pause")
-  #
-  #   } else {
-  #
-  #     if(any(data_scenario$data_scenario[, c(x,y)] < 0)) {
-  #
-  #       data_scenario$data_scenario[apply(data_scenario$data_scenario, 1, function(row) any(row < 0) || any(is.na(row))), ] <- NA
-  #
-  #       na_idx <- which(apply(data_scenario$data_scenario, 1, function(row) any(is.na(row))))
-  #       data_scenario$betas[na_idx,] <- NA
-  #     }
-  #
-  #     data_scenario_list[[e]] <- data_scenario
-  #
-  #     # ================ #
-  #     # determinate peer #
-  #     # ================ #
-  #
-  #     # first, determinate efficient units
-  #     idx_eff <- which(eff_vector$eff_vector > scenarios[e])
-  #
-  #     if (!length(idx_eff) == 0) {
-  #
-  #       # save distances structure
-  #       save_dist <- matrix(
-  #         data = NA,
-  #         ncol = length(idx_eff),
-  #         nrow = nrow(data_save)
-  #       )
-  #
-  #       # save weighted distances structure
-  #       save_dist_weight <- matrix(
-  #         data = NA,
-  #         ncol = length(idx_eff),
-  #         nrow = nrow(data_save)
-  #       )
-  #
-  #       # calculate distances
-  #       for (unit_eff in idx_eff) {
-  #
-  #         # set reference
-  #         reference <- data_save[unit_eff, c(x,y)]
-  #
-  #         distance <- unname(apply(data_save[, c(x,y)], 1, function(x) sqrt(sum((x - reference)^2))))
-  #
-  #         # get position in save results
-  #         idx_dis <- which(idx_eff == unit_eff)
-  #
-  #         save_dist[,idx_dis] <- as.matrix(distance)
-  #       }
-  #
-  #       near_idx_eff <- apply(save_dist, 1, function(row) {
-  #
-  #         which.min(abs(row))
-  #
-  #       })
-  #
-  #       peer_restult <- matrix(
-  #         data = NA,
-  #         ncol = 1,
-  #         nrow = nrow(data_save)
-  #       )
-  #
-  #       peer_restult[, 1] <- idx_eff[near_idx_eff]
-  #
-  #       # save_peer
-  #       peer_list[[e]] <- peer_restult
-  #
-  #       # eval_data[1, c(x, y)]
-  #       # eval_data[3, c(x, y)]
-  #       #
-  #       # eval_data[1, c(x, y)] - eval_data[3, c(x, y)]
-  #       #
-  #       # ((eval_data[1, c(x, y)] - eval_data[3, c(x, y)]))^2
-  #       #
-  #       # result_SA * ((eval_data[1, c(x, y)] - eval_data[3, c(x, y)]))^2
-  #       #
-  #       # sum(result_SA * ((eval_data[1, c(x, y)] - eval_data[3, c(x, y)])^2))
-  #       #
-  #       # sqrt( sum(result_SA * ((eval_data[1, c(x, y)] - eval_data[3, c(x, y)])^2)))
-  #
-  #       # calculate weighted distances
-  #       result_SA_matrix <- as.data.frame(matrix(
-  #         data = rep(unlist(result_SA[c(x,y)]), each = nrow(data_save)),
-  #         nrow = nrow(data_save),
-  #         ncol = ncol(data_save[,c(x,y)]),
-  #         byrow = FALSE
-  #       ))
-  #       names(result_SA_matrix) <- names(data_save)[c(x,y)]
-  #
-  #       w_eval_data <- data_save[, c(x, y)] * result_SA_matrix
-  #
-  #       for (unit_eff in idx_eff) {
-  #
-  #         # set reference
-  #         reference <- data_save[unit_eff, c(x,y)]
-  #
-  #         distance <- unname(apply(data_save[, c(x, y)], 1, function(row) {
-  #            sqrt((sum(result_SA[c(x,y)] * ((row - reference)^2))))
-  #         }))
-  #
-  #         # get position in save results
-  #         idx_dis <- which(idx_eff == unit_eff)
-  #         save_dist_weight[,idx_dis] <- as.matrix(distance)
-  #       }
-  #
-  #       near_idx_eff_weight <- apply(save_dist_weight, 1, function(row) {
-  #
-  #         which.min(abs(row))
-  #
-  #       })
-  #
-  #       peer_restult_weight <- matrix(
-  #         data = NA,
-  #         ncol = 1,
-  #         nrow = nrow(save_dist_weight)
-  #       )
-  #
-  #       peer_restult_weight[, 1] <- idx_eff[near_idx_eff]
-  #
-  #       # save_peer
-  #       peer_weight_list[[e]] <- peer_restult_weight
-  #
-  #       # join data plus betas to metrics for scenario
-  #       data_metrics <- cbind(data_scenario$data_scenario, round(data_scenario$betas, 5))
-  #
-  #       # number not scenario
-  #       n_not_prob <- which(data_metrics$probability < scenarios[e])
-  #       n_not_prob_list[[e]] <- n_not_prob
-  #
-  #       # count na
-  #       na_row <- which(apply(data_metrics, 1, function(row) all(is.na(row))))
-  #       count_na <- length(na_row)
-  #       na_count_list[[e]] <- count_na
-  #
-  #       # metrics: mean, median, sd
-  #       main_metrics <- as.data.frame(matrix(
-  #         data = NA,
-  #         ncol = ncol(data_metrics),
-  #         nrow = 3
-  #       ))
-  #
-  #       # metrics
-  #       main_metrics[1,] <- apply(data_metrics, 2, mean, na.rm = TRUE)
-  #       main_metrics[2,] <- apply(data_metrics, 2, median, na.rm = TRUE)
-  #       main_metrics[3,] <- apply(data_metrics, 2, sd, na.rm = TRUE)
-  #
-  #       names(main_metrics) <- names(data_metrics)
-  #       row.names(main_metrics) <- c("mean", "median", "sd")
-  #
-  #       metrics_list[[e]] <- main_metrics
-  #
-  #     } else {
-  #
-  #       peer_list[[e]] <- NULL
-  #       na_count_list[[e]] <- nrow(eval_data)
-  #       metrics_list[[e]] <- NULL
-  #     }
-  #
-  #   }
-  #
-  # } # end loop scenarios
-  #
-  # # names(data_scenario_list) <- scenarios
-  # #
-  # # names(na_count_list) <- scenarios
-  # #
-  # # if (!(length(metrics_list) == 0)) {
-  # #
-  # #   if (!(length(metrics_list)) == length(scenarios)) {
-  # #     scenarios <- scenarios[1:length(metrics_list)]
-  # #   }
-  # #
-  # #   names(metrics_list) <- scenarios
-  # #   names(peer_list) <- scenarios
-  # #   names(peer_weight_list) <- scenarios
-  # #   names(n_not_prob_list) <- scenarios
-  # # }
-  # #
-  # # # check real data performance
-  # # y_obs <- eval_data$class_efficiency
-  # # y_hat <- predict(best_ml_model, eval_data)
-  # #
-  # #create confusion matrix and calculate metrics related to confusion matrix
-  # performance_real_data <- confusionMatrix (
-  #   data = y_hat,
-  #   reference = y_obs,
-  #   mode = "everything",
-  #   positive = "efficient"
-  # )[["byClass"]]
-  #
-  # final_model <- list(
-  #   train_decision_balance = train_decision_balance,
-  #   real_decision_balance = selected_real_balance,
-  #   best_balance = best_balance,
-  #   final_model = final_model,
-  #   performance_train_dataset = selected_model,
-  #   performance_real_data = performance_real_data,
-  #   importance = importance,
-  #   result_SA = result_SA,
-  #   eff_vector = eff_vector,
-  #   ranking_order = ranking_order,
-  #   peer_list = peer_list,
-  #   peer_weight_list = peer_weight_list,
-  #   data_scenario_list = data_scenario_list,
-  #   metrics_list = metrics_list,
-  #   count_na = na_count_list,
-  #   n_not_prob_list = n_not_prob_list
-  # )
-  #
-  # return(final_model)
-
-}
-
-#' @title Select cut-off point in Classification Algorithm
-#'
-#' @description This function selects the cut-off point that minimizes the sum of false positives and false negatives.
-#'
-#' @param data A \code{data.frame} or \code{matrix} containing the variables in the model.
-#' @param final_model The best \code{train} object from \code{caret}.
-#'
-#' @return It returns the best cut-off point.
-
-select_cut_off <- function (
-    data, final_model
-    ) {
-
-  # cut-off points
-  df_cp <- data.frame (
-    cut_off_points = seq(0, 1, by = 0.01),
-    false_pred = NA
-  )
-
-  # predictions
-  y_hat <- predict(final_model, data, type = "prob")
-
-  for (i in 1:nrow(df_cp)) {
-
-    # cut-off point
-    cp_point <- df_cp[i, "cut_off_points"]
-
-    # predictions for a given cut-off point
-    y_hat_cp <- ifelse(y_hat$efficient >= cp_point, "efficient", "not_efficient")
-    y_hat_cp <- factor(y_hat_cp, levels = c("efficient", "not_efficient"))
-
-    # confusion matrix
-    cm_cp <- confusionMatrix (
-      data = y_hat_cp,
-      reference = data$class_efficiency,
-      mode = "everything",
-      positive = "efficient"
-    )[["table"]]
-
-    # compute false positive and false negative
-    df_cp[i, "false_pred"] <- cm_cp[2, 1] + cm_cp[1, 2]
   }
 
-  # minimum cost for the cut-off point
-  min_value <- min(df_cp$false_pred)
-  min_index <- which(df_cp$false_pred == min_value)
-  cut_point <- df_cp[max(min_index), "cut_off_points"]
+  # 6) recuperar la especificación del modelo ganador (cadena)
+  m <- methods[[final_method]]
+  final_method_string <- if (!is.null(m$model)) {
+    m$model
+  } else {
+    m
+  }
 
-  return(cut_point)
+  # 7) entrenar el modelo final con method="none" y tuneGrid=final_hyparams
+  #    IMPORTANTE: si usas tu resumen custom, vuelve a fijarlo aquí.
+  # MySummary <- trControl$summaryFunction  # si lo definiste arriba
+  final_ctrl <- caret::trainControl(method = "none", classProbs = TRUE, summaryFunction = MySummary)
+
+  set.seed(seed)  # asumiendo que 'seed' existe en tu entorno
+  ml_model_final <- caret::train(
+    form = class_efficiency ~ .,
+    data = full_data_for_training,
+    method = final_method_string,
+    metric = metric,
+    trControl = final_ctrl,
+    tuneGrid = final_hyparams
+  )
+
+  # save the best
+  best_models[["__FINAL__"]] <- ml_model_final
+
+  final_model <- ml_model_final
+
+  # ----------------------------------------------------------------------------
+  # detecting importance variables ---------------------------------------------
+  # ----------------------------------------------------------------------------
+
+  # save train data, change name and position
+  train_data <- final_model[["trainingData"]]
+  names(train_data)[1] <- "class_efficiency"
+
+  train_data <- train_data[,c(2:length(train_data),1)]
+
+  if (importance_method == "SA") {
+
+    # importance with our model of Caret
+    mypred <- function(M, data) {
+      return (predict(M, data[-length(data)], type = "prob"))
+    }
+
+    # Define methods and measures
+    methods_SA <- c("1D-SA") # c("1D-SA", "sens", "DSA", "MSA", "CSA", "GSA")
+    measures_SA <- c("AAD") #  c("AAD", "gradient", "variance", "range")
+
+    levels <- 7
+
+  } else if (importance_method == "SHAP") {
+
+    # the fisrt level is efficient
+    train_data$class_efficiency <- factor(
+      train_data$class_efficiency,
+      levels = c("efficient","not_efficient")
+      )
+
+    # matrix of data without label
+    X <- train_data[, setdiff(names(train_data), "class_efficiency"), drop = FALSE]
+
+    # predict efficiency
+    f_pred <- function(object, newdata) {
+      predict(object, newdata = newdata, type = "prob")[, "efficient"]
+    }
+
+    #
+    shap_model <- fastshap::explain(
+      object       = final_model,
+      X            = X,
+      pred_wrapper = f_pred,
+      newdata      = X,
+      nsim         = 500 # 2048
+    )
+
+    # global importance = mean |SHAP| per variable
+    imp <- data.frame(
+      feature = colnames(shap_model),
+      importance = colMeans(abs(shap_model), na.rm = TRUE)
+    )
+
+    # Normalize
+    imp_norm <- imp[order(-imp$importance), , drop = FALSE]
+    imp_norm$importance_norm <- imp_norm$importance / sum(imp_norm$importance, na.rm = TRUE)
+    importance <- imp_norm$importance_norm
+    importance
+
+  } else if (importance_method == "PI") {
+
+    # the fisrt level is efficient
+    train_data$class_efficiency <- factor(
+      train_data$class_efficiency,
+      levels = c("efficient","not_efficient")
+    )
+
+    # matrix of data without label
+    X <- train_data[, setdiff(names(train_data), "class_efficiency"), drop = FALSE]
+
+    # 3) Wrapper de predicción: devuelve P(clase positiva)
+    #    (robusto al nombre de columna por si cambiaste niveles después de entrenar)
+    f_pred <- function(object, newdata) {
+
+      pr <- as.data.frame(predict(object, newdata = newdata, type = "prob"))
+
+      pos_col <- if ("efficient" %in% names(pr)) {
+        "efficient"
+      } else {
+          names(pr)[1]
+      }
+
+
+      as.numeric(pr[[pos_col]])
+
+    }
+
+    # 4) Construir el Predictor de iml
+    pred_obj <- iml::Predictor$new(
+      model = final_model,
+      data = X,
+      y = train_data$class_efficiency,
+      predict.function = f_pred,
+      type = "prob"
+    )
+
+    # Loss Function by AUC
+    loss_auc <- function(truth, estimate) {
+
+      # truth puede venir como factor → lo mapeamos a 0/1 con positivo = 1
+      y_bin <- if (is.factor(truth)) as.numeric(truth == levels(truth)[1]) else as.numeric(truth)
+
+      if (length(unique(y_bin)) < 2) return(NA_real_)  # guardia por si algún bloque queda con 1 sola clase
+
+      1 - as.numeric(pROC::auc(response = y_bin, predictor = estimate))
+
+    }
+
+    # 6) Permutation Importance (repite permutaciones para estabilidad)
+    set.seed(0)
+    fi <- FeatureImp$new(
+      predictor = pred_obj,
+      loss = loss_auc,
+      compare = "difference",      # caída de rendimiento vs. modelo completo
+      n.repetitions = 30           # sube si quieres más estabilidad
+    )
+
+    # 7) Tabla de importancias y normalización (mismo formato que usabas con SHAP)
+    imp <- fi$results[, c("feature", "importance")]
+    imp <- imp[order(-imp$importance), , drop = FALSE]
+    imp$importance_norm <- imp$importance / sum(imp$importance, na.rm = TRUE)
+
+    importance <- imp$importance_norm
+    importance
+  }
+
+  result_importance <- importance
+  names(result_importance) <- setdiff(names(train_data), "class_efficiency")
+
+  print(paste("Inputs importance: ", round(sum(result_importance[1:length(x)]))), 5)
+  print(paste("Outputs importance: ", round(sum(result_importance[(length(x)+1):(length(x)+length(y))]))), 5)
+
+  # ----------------------------------------------------------------------------
+  # get ranking ----------------------------------------------------------------
+  # ----------------------------------------------------------------------------
+
+  data_rank <- data[,setdiff(names(train_data), "class_efficiency")]
+  data_rank <- as.data.frame(data_rank)
+
+  eff_vector <- apply(data_rank, 1, function(row) {
+
+    row_df <- as.data.frame(t(row))
+
+    colnames(row_df) <- names(data_rank)
+
+    pred <- unlist(predict(final_model, row_df, type = "prob")[1])
+
+    return(pred)
+  })
+
+  eff_vector <- as.data.frame(eff_vector)
+
+  id <- as.data.frame(c(1:nrow(data)))
+  names(id) <- "id"
+  eff_vector <- cbind(id, eff_vector)
+
+  ranking_order <- eff_vector[order(eff_vector$eff_vector, decreasing = TRUE), ]
+
+  # ----------------------------------------------------------------------------
+  # to get probabilities scenarios ---------------------------------------------
+  # ----------------------------------------------------------------------------
+  data_scenario_list <- list()
+  metrics_list <- list()
+  peer_list <- list()
+  peer_weight_list <- list()
+  na_count_list <- list()
+  n_not_prob_list <- list()
+
+  for (e in 1:length(scenarios)) {
+    print(paste("scenario: ", scenarios[e]))
+    print(final_model)
+
+    data_scenario <- compute_target(
+      data = data[,setdiff(names(train_data), "class_efficiency")],
+      x = x,
+      y = y,
+      final_model = final_model,
+      cut_off = scenarios[e],
+      imp_vector = result_importance
+    )
+
+    if(all(is.na(data_scenario$data_scenario))) {
+      print("all na")
+      browser()
+
+      # peer
+      peer_restult <- NA
+
+      # save_peer
+      peer_list[[e]] <- peer_restult
+
+      # main_metrics
+      main_metrics <- NA
+
+      # save main_metrics
+      metrics_list[[e]] <- main_metrics
+
+      print("pause")
+
+    } else {
+
+      if(any(data_scenario$data_scenario[, c(x,y)] < 0)) {
+
+        data_scenario$data_scenario[apply(data_scenario$data_scenario, 1, function(row) any(row < 0) || any(is.na(row))), ] <- NA
+
+        na_idx <- which(apply(data_scenario$data_scenario, 1, function(row) any(is.na(row))))
+        data_scenario$betas[na_idx,] <- NA
+      }
+
+      data_scenario_list[[e]] <- data_scenario
+
+      # ------------------------------------------------------------------------
+      # determinate peer -------------------------------------------------------
+      # ------------------------------------------------------------------------
+
+      # first, determinate efficient units
+      idx_eff <- which(eff_vector$eff_vector > scenarios[e])
+
+      if (!length(idx_eff) == 0) {
+
+        # save distances structure
+        save_dist <- matrix(
+          data = NA,
+          ncol = length(idx_eff),
+          nrow = nrow(data)
+        )
+
+        # save weighted distances structure
+        save_dist_weight <- matrix(
+          data = NA,
+          ncol = length(idx_eff),
+          nrow = nrow(data)
+        )
+
+        # calculate distances
+        for (unit_eff in idx_eff) {
+
+          # set reference
+          reference <- data[unit_eff, c(x,y)]
+
+          distance <- unname(apply(data[, c(x,y)], 1, function(x) sqrt(sum((x - reference)^2))))
+
+          # get position in save results
+          idx_dis <- which(idx_eff == unit_eff)
+
+          save_dist[,idx_dis] <- as.matrix(distance)
+        }
+
+        near_idx_eff <- apply(save_dist, 1, function(row) {
+
+          which.min(abs(row))
+
+        })
+
+        peer_restult <- matrix(
+          data = NA,
+          ncol = 1,
+          nrow = nrow(data)
+        )
+
+        peer_restult[, 1] <- idx_eff[near_idx_eff]
+
+        # save_peer
+        peer_list[[e]] <- peer_restult
+
+        # eval_data[1, c(x, y)]
+        # eval_data[3, c(x, y)]
+        #
+        # eval_data[1, c(x, y)] - eval_data[3, c(x, y)]
+        #
+        # ((eval_data[1, c(x, y)] - eval_data[3, c(x, y)]))^2
+        #
+        # result_SA * ((eval_data[1, c(x, y)] - eval_data[3, c(x, y)]))^2
+        #
+        # sum(result_SA * ((eval_data[1, c(x, y)] - eval_data[3, c(x, y)])^2))
+        #
+        # sqrt( sum(result_SA * ((eval_data[1, c(x, y)] - eval_data[3, c(x, y)])^2)))
+
+        # calculate weighted distances
+        result_importance_matrix <- as.data.frame(matrix(
+          data = rep(unlist(result_importance[c(x,y)]), each = nrow(data)),
+          nrow = nrow(data),
+          ncol = ncol(data[,c(x,y)]),
+          byrow = FALSE
+        ))
+        names(result_importance_matrix) <- names(data)[c(x,y)]
+
+        w_eval_data <- data[, c(x, y)] * result_importance_matrix
+
+        for (unit_eff in idx_eff) {
+
+          # set reference
+          reference <- data[unit_eff, c(x,y)]
+
+          distance <- unname(apply(data[, c(x, y)], 1, function(row) {
+             sqrt((sum(result_importance[c(x,y)] * ((row - reference)^2))))
+          }))
+
+          # get position in save results
+          idx_dis <- which(idx_eff == unit_eff)
+          save_dist_weight[,idx_dis] <- as.matrix(distance)
+        }
+
+        near_idx_eff_weight <- apply(save_dist_weight, 1, function(row) {
+
+          which.min(abs(row))
+
+        })
+
+        peer_restult_weight <- matrix(
+          data = NA,
+          ncol = 1,
+          nrow = nrow(save_dist_weight)
+        )
+
+        peer_restult_weight[, 1] <- idx_eff[near_idx_eff]
+
+        # save_peer
+        peer_weight_list[[e]] <- peer_restult_weight
+
+        # # join data plus betas to metrics for scenario
+        # data_metrics <- cbind(data_scenario$data_scenario, round(data_scenario$betas, 5))
+        #
+        # # number not scenario
+        # n_not_prob <- which(data_metrics$probability < scenarios[e])
+        # n_not_prob_list[[e]] <- n_not_prob
+        #
+        # # count na
+        # na_row <- which(apply(data_metrics, 1, function(row) all(is.na(row))))
+        # count_na <- length(na_row)
+        # na_count_list[[e]] <- count_na
+        #
+        # # metrics: mean, median, sd
+        # main_metrics <- as.data.frame(matrix(
+        #   data = NA,
+        #   ncol = ncol(data_metrics),
+        #   nrow = 3
+        # ))
+        #
+        # # metrics
+        # main_metrics[1,] <- apply(data_metrics, 2, mean, na.rm = TRUE)
+        # main_metrics[2,] <- apply(data_metrics, 2, median, na.rm = TRUE)
+        # main_metrics[3,] <- apply(data_metrics, 2, sd, na.rm = TRUE)
+        #
+        # names(main_metrics) <- names(data_metrics)
+        # row.names(main_metrics) <- c("mean", "median", "sd")
+        #
+        # metrics_list[[e]] <- main_metrics
+
+      } else {
+
+        peer_list[[e]] <- NULL
+        na_count_list[[e]] <- nrow(data)
+        metrics_list[[e]] <- NULL
+      }
+
+      # join data plus betas to metrics for scenario
+      data_metrics <- cbind(data_scenario$data_scenario, round(data_scenario$betas, 5))
+
+      # number not scenario
+      n_not_prob <- which(data_metrics$probability < scenarios[e])
+      n_not_prob_list[[e]] <- n_not_prob
+
+      # count na
+      na_row <- which(apply(data_metrics, 1, function(row) all(is.na(row))))
+      count_na <- length(na_row)
+      na_count_list[[e]] <- count_na
+
+      # metrics: mean, median, sd
+      main_metrics <- as.data.frame(matrix(
+        data = NA,
+        ncol = ncol(data_metrics),
+        nrow = 3
+      ))
+
+      # metrics
+      main_metrics[1,] <- apply(data_metrics, 2, mean, na.rm = TRUE)
+      main_metrics[2,] <- apply(data_metrics, 2, median, na.rm = TRUE)
+      main_metrics[3,] <- apply(data_metrics, 2, sd, na.rm = TRUE)
+
+      names(main_metrics) <- names(data_metrics)
+      row.names(main_metrics) <- c("mean", "median", "sd")
+
+      metrics_list[[e]] <- main_metrics
+
+    }
+
+  } # end loop scenarios
+
+  final_model <- list(
+    final_method = final_method,
+    final_imbalance_rate = final_imbalance_rate,
+    performance_train_all = performance_train_all,
+    save_performance = save_performance,
+    final_model = final_model,
+
+    # # train_decision_balance = train_decision_balance,
+    # real_decision_balance = selected_real_balance,
+
+
+    # performance_train_dataset = selected_model,
+    # performance_real_data = performance_real_data,
+    # importance = importance,
+    result_importance = result_importance,
+    eff_vector = eff_vector,
+    ranking_order = ranking_order,
+    peer_list = peer_list,
+    peer_weight_list = peer_weight_list,
+    data_scenario_list = data_scenario_list,
+    metrics_list = metrics_list,
+    count_na = na_count_list,
+    n_not_prob_list = n_not_prob_list
+  )
+
+  return(final_model)
+
 }

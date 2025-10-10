@@ -12,11 +12,10 @@ efficiency_estimation(
   trControl,
   methods,
   metric,
+  importance_method,
   hold_out,
   balance_data = 0,
-  scenarios = 0.75,
-  convexity = TRUE,
-  returns = "variable"
+  scenarios = 0.75
 )
 }
 \arguments{
@@ -43,17 +42,19 @@ returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 
 \item{metric}{A \code{string} specifying the summary metric for classification to select the optimal model. Default includes \code{"Balanced_accuracy"} due to (normally) unbalanced data.}
 
+\item{importance_method}{A \code{string} specifying the method to determine the relative importance of variables. Default includes \code{"SHAP"}.}
+
 \item{hold_out}{A \code{number} value (5-20) for validation data percentage during training (default: 0.2).}
 
 \item{balance_data}{Indicate the number of efficient and not efficient units.}
 
 \item{scenarios}{Level of efficiency to peer.}
 
+\item{target_method}{Methodology for labeling the data.}
+
 \item{convexity}{A \code{logical} value indicating if a convex technology is assumed.}
 
 \item{returns}{Type of returns to scale.}
-
-\item{target_method}{Methodology for labeling the data.}
 }
 \value{
 A \code{"cafee"} object.
