@@ -4,14 +4,16 @@
 \alias{train_ml}
 \title{Training a Classification Machine Learning Model}
 \usage{
-train_ml(data, trControl, methods, metric)
+train_ml(data, trControl, method, arguments, metric)
 }
 \arguments{
 \item{data}{A \code{data.frame} or \code{matrix} containing the variables in the model.}
 
 \item{trControl}{Parameters for controlling the training process (from the \code{'caret'} package).}
 
-\item{methods}{A \code{list} of selected machine learning models and their hyperparameters.}
+\item{method}{A \code{list} of selected machine learning models and their hyperparameters.}
+
+\item{arguments}{A \code{list}}
 
 \item{metric}{A \code{string} specifying the summary metric for classification to select the optimal model. Default includes \code{"Balanced_accuracy"} due to (normally) unbalanced data.}
 }

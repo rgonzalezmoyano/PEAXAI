@@ -60,7 +60,7 @@ get_SMOTE_DMUs <- function (
     # determinate number of efficient and not efficient to create --------------
     # --------------------------------------------------------------------------
     # information balancing process
-    print(paste("Balance: ", balance))
+    message(paste0("Balancing: ", balance))
 
     # determinate numbre of efficient and ineeficient units
     n_real_eff <- nrow(data[data$class_efficiency == "efficient",])
@@ -134,7 +134,7 @@ get_SMOTE_DMUs <- function (
     # balance perfect, next
     if (create_eff == 0 & create_ineff == 0) {
 
-      print(paste("Balance perfect"))
+      message(paste("Balance perfect"))
 
       save_dataset <- rbind(save_dataset, data)
       next
@@ -251,7 +251,7 @@ get_SMOTE_DMUs <- function (
         # count
         count_browser <- count_browser + 1
 
-        print((nrow(save_lambda_eff)/need_eff)*100)
+        # print((nrow(save_lambda_eff)/need_eff)*100)
 
         # process to generate lambda
         generate_lambda <- runif(length(c(x, y)), min = 0.01, max = 0.99)
@@ -301,11 +301,11 @@ get_SMOTE_DMUs <- function (
       need_eff <- nrow(results_convx) - create_eff
 
       if (need_eff != 0) {
-        print("linea 360")
+
 
         new_idx <- sample(1:nrow(results_convx), size = need_eff)
       } else {
-        print("linea 364")
+
         new_idx <- 1:nrow(results_convx)
       }
 

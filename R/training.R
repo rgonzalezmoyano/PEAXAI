@@ -4,182 +4,128 @@
 #'
 #' @param data A \code{data.frame} or \code{matrix} containing the variables in the model.
 #' @param trControl Parameters for controlling the training process (from the \code{'caret'} package).
-#' @param methods A \code{list} of selected machine learning models and their hyperparameters.
+#' @param method A \code{list} of selected machine learning models and their hyperparameters.
+#' @param arguments A \code{list}
 #' @param metric A \code{string} specifying the summary metric for classification to select the optimal model. Default includes \code{"Balanced_accuracy"} due to (normally) unbalanced data.
 
 #'
-#' @importFrom caret train twoClassSummary
-#' @importFrom magrittr arrange
+#' @importFrom caret train createFolds
+
 #'
 #' @return It returns a \code{list} with the chosen model.
 
 train_ml <- function (
-    data, trControl, methods, metric
+    data, trControl, method, arguments, metric
     ) {
 
-  # list with best configuration
-  best_model_fit <- vector("list", length = length(method))
+  # first, create k-folds
+  folds <- createFolds(data$class_efficiency, k = 5) # lista: indica qué filas usar como test en cada iteración
 
-  browser()
+  for (hyparameter_i in 1:nrow(arguments[["tuneGrid"]])) {
 
-  for (a in 1:length(methods)) {
+    hyparameter <- arguments[["tuneGrid"]][hyparameter_i, ]
 
-    model <- train(
-      class_efficiency ~.,
-      data = data,
-      method = methods[],
-      metric = metric,
-      tuneGrid = tunegrid,
-      trControl = control)
+    if (method == "glm") {
+      type = "response"
+    } else {
+      type = "prob"
+    }
 
-  }
+    for (fold in folds) {
 
+      training_fold <- data[-fold, ]
+      test_fold <- data[fold, ]
 
-  for (a in 1:length(methods)) {
+      if (method == "nnet") {
 
-      # parameters grid
-      tune_grid <- unique(expand.grid(methods[[a]]$hyparams))
-
-      # avoid messages for some methods
-      verb_methods <- c("gbm", "svmPoly")
-
-      if (names(methods[a]) == "rf") {
-
-        modellist <- list()
-
-        # ntree parameter change
-        for (ntree in methods[[a]]$options$ntree) {
-
-          # Tune model rf
-          model <- train (
-            form = class_efficiency ~ .,
-            data = data,
-            method = names(methods[a]),
-            trControl = trControl,
-            tuneGrid = tune_grid,
-            ntree = ntree,
-            metric = metric
-          )
-
-          key <- toString(ntree)
-          modellist[[key]] <- c(method = names(methods[a]), ntree = ntree, model$results)
-
-        }
-
-        # dataframe results
-        model_rf <- matrix(
-          data = NA,
-          ncol = 21,
-          nrow = length(methods[[a]]$options$ntree)
-        )
-
-        # to dataframe
-        model_rf <- as.data.frame(model_rf)
-
-        # paste iteration intormation
-        for (row in 1:length(methods[[a]]$options$ntree)) {
-
-          model_rf[row, ] <-  modellist[[row]]
-
-        }
-
-        # add names
-        names_result <- c("method", "ntree", unique(names(model$results)))
-        names(model_rf) <- names_result
-
-        # select best configuration
-        selected_model <- model_rf %>%
-          arrange(desc(Accuracy), desc(F), desc(Spec), desc(AUC), desc(Kappa))
-
-        best_model_fit[[a]] <- selected_model[1, ]
-
-      } else if (names(methods[a]) == "nnet") {
-
-        # Tune model nnet
-        model_nnet <- train (
-          form = class_efficiency ~ .,
-          data = data,
-          method = names(methods[a]),
-          trControl = trControl,
-          tuneGrid = tune_grid,
+        model_fit <- train(
+          class_efficiency ~ .,
+          data = training_fold,
+          method = "nnet",
+          preProcess = arguments[["preProcess"]],
+          tuneGrid = hyparameter,
+          trControl = trainControl(method = "none", classProbs = TRUE),
           metric = metric,
-          maxit = methods$nnet$options$maxit
+
+          # nnet (no fine-tuning)
+          skip      = arguments[["skip"]],
+          maxit     = arguments[["maxit"]],
+          MaxNWts   = arguments[["MaxNWts"]],
+          trace     = arguments[["trace"]]
         )
 
-        # # Tune model nnet with nnet
-        # model_nnet <- nnet(
-        #   x = as.matrix(iris_scaled[, 1:4]),  # Variables predictoras
-        #   y = as.matrix(iris_scaled$Species),  # Etiquetas en formato binario
-        #   size = 3,         # Número de neuronas en la capa oculta
-        #   softmax = TRUE,   # Activar softmax
-        #   maxit = 200,      # Máximo de iteraciones
-        #   trace = FALSE     # No mostrar el progreso
-        # )
+      } else if (method == "rf") {
 
-        selected_model <- round(model_nnet[["results"]], 2) %>%
-          mutate(Balance_accuracy = (Sens + Spec) / 2) %>%  # Añadir la nueva métrica
-          arrange(desc(Balance_accuracy), desc(F), desc(Precision), desc(AUC), desc(Kappa))
+        model_fit <- train(
+          class_efficiency ~ .,
+          data = data,
+          method = "rf",
+          tuneGrid = arguments[["tuneGrid"]],
+          trControl = trControl,
+          metric = metric,
 
-        # selected_model$balance <- round(prop.table(table(data$class_efficiency))[1], 1)
-
-        # add names
-        selected_model <- cbind(
-          data.frame(
-            method = names(methods[a])
-          ), selected_model
+          # rf (no fine-tuning)
+          ntree = arguments[["ntree"]]
         )
 
-        best_model_fit[[a]] <- selected_model[1, ]
-
-      } else {
-
-        # svm and others methods
-        if (names(methods[a]) %in% verb_methods) {
-
-          # Tune models
-          model <- train (
-            form = class_efficiency ~ .,
-            data = data,
-            method = names(methods[a]),
-            trControl = trControl,
-            tuneGrid = tune_grid,
-            verbose = FALSE
-          )
-
-        } else {
-          # Tune models
-          model <- train (
-            form = class_efficiency ~ .,
-            data = data,
-            method = names(methods[a]),
-            trControl = trControl,
-            tuneGrid = tune_grid
-          )
-        }
-
-        # compute F1 score
-        prec <- model[["results"]]["Precision"]
-        sens <- model[["results"]]["Sens"]
-
-        model[["results"]]["F1"] <- (2 * prec * sens) / (sens + prec)
-
-        # select best configuration
-        best_config <- model[["results"]] %>%
-          arrange(desc(F1), desc(Spec), desc(AUC), desc(Kappa), desc(Accuracy))
-
-        names_result <- c("method", unique(names(model$results)))
-
-        #best_model_fit[[a]] <- best_config[1, ]
-
-        best_model_fit[[a]] <- cbind(model$method, best_config[1, ])
-        best_model_fit[[a]] <- cbind(model$method, best_config[1, ])
-
-        names(best_model_fit[[a]]) <- names_result
-        names(best_model_fit[a]) <- model$method
       }
 
+
+      # test performance
+      test_fold$pred <- predict(model_fit, newdata = test_fold[, setdiff(names(test_fold), "class_efficiency")], type = type)[,1]
+      browser()
+      data$obs  <- factor(data$obs,  levels = lev)
+
+      cm <- confusionMatrix(
+        data = data$pred,
+        reference = data$obs,
+        mode = "everything",
+        positive = "efficient"
+      )
+
+      # ROC-AUC
+      roc_obj <- pROC::roc(
+        response = data$obs,
+        predictor = data$efficient,
+        levels = rev(lev), # primero el negativo
+        direction = "<",
+        quiet = TRUE)
+
+      # PR-AUC
+      ppos <- data[["efficient"]]
+
+      pr_obj <- PRROC::pr.curve(
+        scores.class0 = data[["efficient"]] [data$obs == "efficient"],
+        scores.class1 = data[["efficient"]] [data$obs == "not_efficient"],
+        curve = TRUE
+      )
+
+      # Entropy/Calibration metrics
+
+      eps <- 1e-15
+      y <- as.integer(data$obs == "efficient")
+
+      pcl <- pmin(pmax(data[["efficient"]], eps), 1 - eps)
+      LogLoss <- -mean(y * log(pcl) + (1 - y) * log(1 - pcl))
+      # PredEntropy_bits <- -mean(pcl * log2(pcl) + (1 - pcl) * log2(1 - pcl))
+      # Brier <- mean((pcl - y)^2)
+
+      out <- c(
+        cm$overall[c("Accuracy", "Kappa")],
+        cm$byClass[c("Recall", "Specificity",
+                     "Precision", "F1",
+                     "Balanced Accuracy")],
+        "ROC" = roc_obj$auc,
+        "PR-AUC" = unname(pr_obj$auc.integral),
+        "LogLoss" = LogLoss
+        # "PredEntropy_bits" = PredEntropy_bits,
+        # "Brier" = Brier
+      )
+
+    }
+
   }
 
-  return(best_model_fit)
+  return(model_fit)
 
 }
