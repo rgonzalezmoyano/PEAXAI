@@ -136,9 +136,6 @@ PEAXAI_fitting <- function (
       balance_data = imbalance_rate
     )
 
-    # add no balance scenario
-    # balance <- c(real_balance, imbalance_rate)
-
     datasets_to_train <- append(train_data_SMOTE, datasets_to_train, after = 0)
   }
 
@@ -149,286 +146,337 @@ PEAXAI_fitting <- function (
   # Choose best hyperparameters via: "cv", "test", or "none".
   # If "none" is selected, evaluate performance on the original data (no synthetic units).
   # If multiple imbalance levels tie, break the tie using their training-set performance.
-#comentar
-  # save model
-  best_models <- vector("list", length(methods))
-  names(best_models) <- names(methods)
-
-  # save performance
-  best_performance  <- vector("list", length(methods))
-  names(best_performance) <- names(methods)
-
-  # more information about fitting (grid)
-  performance_train_all_by_dataset <- vector("list", length(datasets_to_train))
-  names(performance_train_all_by_dataset) <- names(datasets_to_train)
-
-  # only the best by imbalance and ML method
-  best_performance_train_all_by_dataset <- vector("list", length(datasets_to_train))
-  names(best_performance_train_all_by_dataset) <- names(datasets_to_train)
-
-  if (trControl[["method"]] == "cv") {
-
-    for (dataset in names(datasets_to_train)) {
-      message(paste0("Case: ", dataset, " imbalance rate"))
-
-      # create k-folds. Same folds for every ML method
-      folds <- createFolds(
-        datasets_to_train[[dataset]]$class_efficiency,
-        k = trControl[["number"]]
-      )
-
-      # tunning...
-
-    } # end addressing imbalance rate datasets
-
-  } else if (trControl[["method"]] == "test_set") {
-
-    # metrics evaluation
-    metric <- metric_priority[1]
-
-    for (dataset in names(datasets_to_train)) {
-      message(paste0("Case: ", dataset, " imbalance rate"))
-
-      # 1 fold train, 2 fold test. they have different nrows
-      # determine which samples are test
-      test_fold <- createDataPartition(
-        datasets_to_train[[dataset]]$class_efficiency,
-        p = trControl[["test_hold_out"]])
-
-      # save training and test sets
-      test_set <- test_fold$Resample1
-
-      train_set <- setdiff(1:nrow(datasets_to_train[[dataset]]), test_set)
-
-      # method
-      performance_train_all_by_method <- vector("list", length(methods))
-      names(performance_train_all_by_method) <- names(methods)
-
-      best_performance_train_all_by_method <- vector("list", length(methods))
-      names(best_performance_train_all_by_method) <- names(methods)
-
-
-      for (method_i in names(methods)) {
-        message(paste0("Training ", method_i, " method."))
-
-        # save best model if the new if better
-        best_record <- NULL
-
-        # save performance by tuneGrid
-        performance_by_tuneGrid <- NULL
-
-        if (method_i == "glm") {
-
-          browser()
-
-        } else {
-
-          # save arguments of the method_i (ML method)
-          arguments <- methods[[method_i]]
-
-          for (hyparameter_i in 1:nrow(arguments[["tuneGrid"]])) {
-
-            hyparameter <- arguments[["tuneGrid"]][hyparameter_i, ]
-            hyparameter <- as.data.frame(hyparameter)
-            names(hyparameter) <- names(arguments[["tuneGrid"]])
-
-            # prediction type
-            type <- "prob"
-            levels_order <- c("efficient", "not_efficient")
-
-            # save performance
-            performance_by_fold <- NULL
-            iter <- 0
-
-            training_fold <- datasets_to_train[[dataset]][train_set, ]
-            test_fold <- datasets_to_train[[dataset]][test_set, ]
-
-            if (method_i == "nnet") {
-
-              model_fit <- train(
-                class_efficiency ~ .,
-                data = training_fold,
-                method = "nnet",
-                preProcess = arguments[["preProcess"]],
-                tuneGrid = hyparameter,
-                trControl = trainControl(method = "none", classProbs = TRUE),
-                metric = metric,
-
-                # nnet (no fine-tuning)
-                skip = arguments[["skip"]],
-                maxit = arguments[["maxit"]],
-                MaxNWts = arguments[["MaxNWts"]],
-                trace = arguments[["trace"]]
-              )
-
-            } else if (method_i == "rf") {
-
-              model_fit <- train(
-                class_efficiency ~ .,
-                data = training_fold,
-                method = "rf",
-                tuneGrid = hyparameter,
-                trControl = trainControl(method = "none", classProbs = TRUE),
-                metric = metric,
-
-                # rf (no fine-tuning)
-                ntree = arguments[["ntree"]]
-              )
-
-            }
-
-            # ------------------------------------------------------------------
-            # test performance -------------------------------------------------
-            # ------------------------------------------------------------------
-
-            # predicted data
-            y_hat <- predict(
-              model_fit, newdata = test_fold[, setdiff(names(test_fold), "class_efficiency")],
-              type = type)[,1]
-
-            # save probabilities
-            y_hat_prob <- y_hat
-
-            # labels -> ML general: 1 efficient level, 2 not_efficient level
-            y_hat <- ifelse(y_hat > 0.5, "efficient", "not_efficient")
-
-            # observed data
-            y_obs <- test_fold$class_efficiency
-
-            # change to factor
-            y_hat <- factor(
-              y_hat,
-              levels = levels_order)
-
-            # calculate confusion matrix
-            cm <- confusionMatrix(
-              data = y_hat,
-              reference = y_obs,
-              mode = "everything",
-              positive = "efficient"
-            )
-
-            # ROC-AUC
-            roc_auc <- pROC::roc(
-              response = y_obs,
-              predictor = y_hat_prob,
-              levels = rev(levels_order),
-              direction = "<",
-              quiet = TRUE)
-
-            # PR-AUC
-            pr_auc <- PRROC::pr.curve(
-              scores.class0 = y_hat_prob[y_obs == "not_efficient"],
-              scores.class1 = y_hat_prob[y_obs == "efficient"],
-              curve = TRUE
-            )
-
-            out <- c(
-              cm$overall[c("Accuracy", "Kappa")],
-              cm$byClass[c("Recall", "Specificity",
-                           "Precision", "F1",
-                           "Balanced Accuracy")],
-              "ROC_AUC" = roc_auc$auc,
-              "PR-AUC" = unname(pr_auc$auc.integral)
-            )
-
-            # not NAs, use all folds to colmeans
-            if (is.na(out[["Precision"]])) {
-              out[["Precision"]] <- 0
-              out[["F1"]] <- 0
-            }
-
-            if (is.na(out[["F1"]])) {
-              out[["F1"]] <- 0
-            }
-
-            # direction metrics
-            direction_metric <- as.data.frame(matrix(
-              data = rep("max", 9),
-              nrow = 1
-            ))
-            names(direction_metric) <- names(out)
-
-            # save prformance
-            performance_by_fold <- rbind(performance_by_fold, out)
-
-            # mean of fold performance
-            performance <- colMeans(performance_by_fold)
-
-            performance <- t(as.data.frame(performance))
-            # row.names(performance) <- NULL
-
-            df_hyp <- data.frame(
-              data = hyparameter
-            )
-
-            names(df_hyp) <- names(arguments[["tuneGrid"]])
-
-            performance <- cbind(df_hyp, performance)
-
-            # tolerance
-            eps <- 0.00001
-# if(method_i == "rf") browser()
-            if (is.null(best_record)) {
-
-              best_record <- performance
-
-            } else if (performance[[metric]] > best_record[[metric]]) {
-
-              best_record <- performance
-
-            } else if (abs(performance[[metric]] - best_record[[metric]]) <= eps) {
-
-              for (m in metric_priority[-1]) {
-
-                result <- abs(performance[[m]] - best_record[[m]])
-
-                if (result > eps) {
-
-                  best_record <- performance
-                  # end comprobation
-                  break
-                }
-
-              }
-
-            }
-
-            performance_by_tuneGrid <- rbind(performance_by_tuneGrid, performance)
-
-          } # end tuneGrid
-
-          # save the training results
-          performance_train_all_by_method[[method_i]] <- performance_by_tuneGrid
-          best_record
-          best_performance_train_all_by_method[[method_i]] <- best_record
-        }
-
-        performance_train_all_by_dataset[[dataset]] <- performance_train_all_by_method
-        best_performance_train_all_by_dataset[[dataset]] <- best_performance_train_all_by_method
-
-      }
-
-    } # end addressing imbalance rate datasets
-    browser()
-  } else if (trControl[["method"]] == "none") {
-
-    for (dataset in names(datasets_to_train)) {
-      message(paste0("Case: ", dataset, " imbalance rate"))
-
-      train_set <- 1:nrow(datasets_to_train[[dataset]])
-      test_set <- 1:nrow(datasets_to_train[[1]])
-      # if there is a tie
-      test_set_tie <- train_set
-
-      # tunning...
-
-    } # end addressing imbalance rate datasets
-
-  }
-
-  # end selecting best hyperparameters
-#comentar ######################################################################
+# #comentar
+#   # save model
+#   best_models <- vector("list", length(methods))
+#   names(best_models) <- names(methods)
+#
+#   # save performance
+#   best_performance  <- vector("list", length(methods))
+#   names(best_performance) <- names(methods)
+#
+#   # more information about fitting (grid)
+#   performance_train_all_by_dataset <- vector("list", length(datasets_to_train))
+#   names(performance_train_all_by_dataset) <- names(datasets_to_train)
+#
+#   # only the best by imbalance and ML method
+#   best_performance_train_all_by_dataset <- vector("list", length(datasets_to_train))
+#   names(best_performance_train_all_by_dataset) <- names(datasets_to_train)
+#
+#   # metrics evaluation
+#   metric <- metric_priority[1]
+#
+#   if (trControl[["method"]] == "cv") {
+#
+#     for (dataset in names(datasets_to_train)) {
+#       message(paste0("Case: ", dataset, " imbalance rate"))
+#
+#       # create k-folds. Same folds for every ML method
+#       folds <- createFolds(
+#         datasets_to_train[[dataset]]$class_efficiency,
+#         k = trControl[["number"]]
+#       )
+#
+#       # tunning...
+#
+#     } # end addressing imbalance rate datasets
+#
+#   } else if (trControl[["method"]] == "test_set") {
+#
+#     for (dataset in names(datasets_to_train)) {
+#       message(paste0("Case: ", dataset, " imbalance rate"))
+#
+#       # 1 fold train, 2 fold test. they have different nrows
+#       # determine which samples are test
+#       test_fold <- createDataPartition(
+#         datasets_to_train[[dataset]]$class_efficiency,
+#         p = trControl[["test_hold_out"]])
+#
+#       # save training and test sets
+#       test_set <- test_fold$Resample1
+#
+#       train_set <- setdiff(1:nrow(datasets_to_train[[dataset]]), test_set)
+#
+#       # method
+#       performance_train_all_by_method <- vector("list", length(methods))
+#       names(performance_train_all_by_method) <- names(methods)
+#
+#       best_performance_train_all_by_method <- vector("list", length(methods))
+#       names(best_performance_train_all_by_method) <- names(methods)
+#
+#       for (method_i in names(methods)) {
+#         message(paste0("Training ", method_i, " method."))
+#
+#         # save best model if the new if better
+#         best_record <- NULL
+#
+#         # save performance by tuneGrid
+#         performance_by_tuneGrid <- NULL
+#
+#         if (method_i == "glm") {
+#
+#           # arguments
+#           arguments <- methods[[method_i]]
+#
+#           # save performance
+#           performance_by_fold <- NULL
+#
+#           # train and test set
+#           training_fold <- datasets_to_train[[dataset]][train_set, ]
+#           test_fold <- datasets_to_train[[dataset]][test_set, ]
+#
+#           # train model ML
+#           model_fit <- train_glm(
+#             data = training_fold,
+#             method = method_i,
+#             arguments = arguments
+#           )
+#
+#           # --------------------------------------------------------------------
+#           # test performance ---------------------------------------------------
+#           # --------------------------------------------------------------------
+#
+#           performance_glm <- performance_glm(
+#             model_fit = model_fit,
+#             new_data = test_fold
+#           )
+#
+#           # not NAs, use all folds to colmeans
+#           if (is.na(performance_glm[["Precision"]])) {
+#             performance_glm[["Precision"]] <- 0
+#             performance_glm[["F1"]] <- 0
+#           }
+#
+#           if (is.na(performance_glm[["F1"]])) {
+#             performance_glm[["F1"]] <- 0
+#           }
+#
+#           # direction metrics
+#           direction_metric <- as.data.frame(matrix(
+#             data = rep("max", 9),
+#             nrow = 1
+#           ))
+#           names(direction_metric) <- names(performance_glm)
+#
+#           # save performance
+#           performance_by_fold <- rbind(performance_by_fold, performance_glm)
+#
+#           # add weights hyperparameter
+#           if (is.null(arguments[["weights"]])) {
+#
+#             weights <- as.data.frame(matrix(
+#               data = 1,
+#               ncol = 2
+#             ))
+#             names(weights) <- c("w0", "w1")
+#
+#           } else if (arguments[["weights"]][1] == "dinamic") {
+#
+#             weights_all <- model_fit[["prior.weights"]]
+#
+#             label_identify_first <- data[1, "class_efficiency"]
+#             weights_identify_first <- weights_all[1]
+#
+#             weights <- as.data.frame(matrix(
+#               data = NA,
+#               ncol = 2
+#             ))
+#             names(weights) <- c("w0", "w1")
+#
+#             if (unique(weights_all)[1] == 1) {
+#
+#               weights <- as.data.frame(matrix(
+#                 data = 1,
+#                 ncol = 2
+#               ))
+#               names(weights) <- c("w0", "w1")
+#
+#             } else {
+#               if (label_identify_first == "efficient") {
+#                 weights$w1 <- weights_identify_first
+#                 weights$w0 <- setdiff(unique(weights_all), weights_identify_first)
+#               } else {
+#                 weights$w0 <- weights_identify_first
+#                 weights$w1 <- setdiff(unique(weights_all), weights_identify_first)
+#               }
+#             }
+#
+#           } else {
+#             weights <- arguments[["weights"]]
+#           }
+#
+#           performance <- cbind(weights, performance_glm)
+#
+#           # tolerance
+#           eps <- 0.00001
+#
+#           # save if the model is better
+#           if (is.null(best_record)) {
+#
+#             best_record <- performance
+#
+#           } else if (performance[[metric]] > best_record[[metric]]) {
+#
+#             best_record <- performance
+#
+#           } else if (abs(performance[[metric]] - best_record[[metric]]) <= eps) {
+#
+#             for (m in metric_priority[-1]) {
+#
+#               result <- abs(performance[[m]] - best_record[[m]])
+#
+#               if (result > eps) {
+#
+#                 best_record <- performance
+#                 # end comprobation
+#                 break
+#               }
+#
+#             }
+#
+#           }
+#
+#           performance_by_tuneGrid <- rbind(performance_by_tuneGrid, performance)
+#
+#           # save the training results
+#           performance_train_all_by_method[[method_i]] <- performance_by_tuneGrid
+#           best_record
+#           best_performance_train_all_by_method[[method_i]] <- best_record
+#
+#         # end glm
+#         } else {
+#
+#           # save arguments of the method_i (ML method)
+#           arguments <- methods[[method_i]]
+#
+#           for (hyparameter_i in 1:nrow(arguments[["tuneGrid"]])) {
+#
+#             hyparameter <- arguments[["tuneGrid"]][hyparameter_i, ]
+#             hyparameter <- as.data.frame(hyparameter)
+#             names(hyparameter) <- names(arguments[["tuneGrid"]])
+#
+#             # prediction type
+#             type <- "prob"
+#             levels_order <- c("efficient", "not_efficient")
+#
+#             # save performance
+#             performance_by_fold <- NULL
+#
+#             # train and test set
+#             training_fold <- datasets_to_train[[dataset]][train_set, ]
+#             test_fold <- datasets_to_train[[dataset]][test_set, ]
+#
+#             # train model ML
+#             model_fit <- train_ml(
+#               data = training_fold,
+#               method = method_i,
+#               arguments = arguments,
+#               hyparameter = hyparameter,
+#               metric = metric
+#             )
+#
+#             # ------------------------------------------------------------------
+#             # test performance -------------------------------------------------
+#             # ------------------------------------------------------------------
+#
+#             performance_ml <- performance_ml(
+#               model_fit = model_fit,
+#               new_data = test_fold
+#             )
+#
+#             # not NAs, use all folds to colmeans
+#             if (is.na(performance_ml[["Precision"]])) {
+#               performance_ml[["Precision"]] <- 0
+#               performance_ml[["F1"]] <- 0
+#             }
+#
+#             if (is.na(performance_ml[["F1"]])) {
+#               performance_ml[["F1"]] <- 0
+#             }
+#
+#             # direction metrics
+#             direction_metric <- as.data.frame(matrix(
+#               data = rep("max", 9),
+#               nrow = 1
+#             ))
+#             names(direction_metric) <- names(performance_ml)
+#
+#             # save prformance
+#             performance_by_fold <- rbind(performance_by_fold, performance_ml)
+#
+#             # add hyperparameter
+#             df_hyp <- data.frame(
+#               data = hyparameter
+#             )
+#
+#             names(df_hyp) <- names(arguments[["tuneGrid"]])
+#
+#             performance <- cbind(df_hyp, performance_ml)
+#
+#             # tolerance
+#             eps <- 0.00001
+#
+#             # save if the model is better
+#             if (is.null(best_record)) {
+#
+#               best_record <- performance
+#
+#             } else if (performance[[metric]] > best_record[[metric]]) {
+#
+#               best_record <- performance
+#
+#             } else if (abs(performance[[metric]] - best_record[[metric]]) <= eps) {
+#
+#               for (m in metric_priority[-1]) {
+#
+#                 result <- abs(performance[[m]] - best_record[[m]])
+#
+#                 if (result > eps) {
+#
+#                   best_record <- performance
+#                   # end comprobation
+#                   break
+#                 }
+#
+#               }
+#
+#             }
+#
+#             performance_by_tuneGrid <- rbind(performance_by_tuneGrid, performance)
+#
+#           } # end tuneGrid
+#
+#           # save the training results
+#           performance_train_all_by_method[[method_i]] <- performance_by_tuneGrid
+#           best_record
+#           best_performance_train_all_by_method[[method_i]] <- best_record
+#         }
+#
+#         performance_train_all_by_dataset[[dataset]] <- performance_train_all_by_method
+#         best_performance_train_all_by_dataset[[dataset]] <- best_performance_train_all_by_method
+#
+#       }
+#
+#     } # end addressing imbalance rate datasets
+#
+#   } else if (trControl[["method"]] == "none") {
+#
+#     for (dataset in names(datasets_to_train)) {
+#       message(paste0("Case: ", dataset, " imbalance rate"))
+#
+#       train_set <- 1:nrow(datasets_to_train[[dataset]])
+#       test_set <- 1:nrow(datasets_to_train[[1]])
+#       # if there is a tie
+#       test_set_tie <- train_set
+#
+#       # tunning...
+#
+#     } # end addressing imbalance rate datasets
+#
+#   }
+# browser()
+#   # end selecting best hyperparameters
+# #comentar ######################################################################
 
   # save model and performance
   best_models <- vector("list", length(methods))
@@ -444,6 +492,8 @@ PEAXAI_fitting <- function (
   # only the best by imbalance and ML method
   best_performance_train_all_by_dataset <- vector("list", length(datasets_to_train))
   names(best_performance_train_all_by_dataset) <- names(datasets_to_train)
+
+  metric <- metric_priority[1]
 
   for (dataset in names(datasets_to_train)) {
 
@@ -789,6 +839,7 @@ browser()
       performance_train_all_by_method[[method_i]] <- performance_by_tuneGrid
       best_record
       best_performance_train_all_by_method[[method_i]] <- best_record
+
     }
 
     performance_train_all_by_dataset[[dataset]] <- performance_train_all_by_method
@@ -1330,7 +1381,8 @@ if(length(best_imbalance_i) > 1) browser()
   output_PEAXAI <- list(
     best_models = save_best_models,
     best_performance = save_best_performance,
-    train_performace_informtation = performance_train_all_by_dataset
+    train_performace_informtation = performance_train_all_by_dataset,
+    labels_DEA = all_data$class_efficiency
   )
 
   return(output_PEAXAI)

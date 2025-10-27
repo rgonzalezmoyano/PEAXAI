@@ -24,8 +24,8 @@
 #'
 #' @export
 
-PEAXAI_target <- function(
-    data, x, y, final_model, importance_variables,
+PEAXAI_targets2 <- function(
+    data, x, y, final_model, imp_global,
     directional_vector, efficiency_thresholds
     ) {
 
@@ -34,58 +34,29 @@ PEAXAI_target <- function(
   x <- 1:(ncol(data) - length(y))
   y <- (length(x) + 1):ncol(data)
 
-
   # ----------------------------------------------------------------------------
-  # predict probability --------------------------------------------------------
+  # to get probabilities scenarios ---------------------------------------------
   # ----------------------------------------------------------------------------
-  data <- as.data.frame(data)
+  data_scenario_list <- list()
+  metrics_list <- list()
+  # peer_list <- list()
+  # peer_weight_list <- list()
+  # na_count_list <- list()
+  n_not_prob_list <- list()
 
-  eff_vector <- apply(data_rank, 1, function(row) {
+  for (e in 1:length(efficiency_thresholds)) {
+    message(paste("efficiency_thresholds: ", efficiency_thresholds[e]))
+    browser()
+    data_scenario <- compute_target(
+      data = data[,setdiff(names(data), "class_efficiency")],
+      x = x,
+      y = y,
+      final_model = final_model,
+      cut_off = efficiency_thresholds[e],
+      imp_vector = directional_vector
+    )
+  }
 
-    row_df <- as.data.frame(t(row))
-
-    colnames(row_df) <- names(data_rank)
-
-    pred <- unlist(predict(final_model, row_df, type = "prob")[1])
-
-    return(pred)
-  })
-
-  # ----------------------------------------------------------------------------
-  # get ranking ----------------------------------------------------------------
-  # ----------------------------------------------------------------------------
-browser()
-
-  eff_vector <- as.data.frame(eff_vector)
-
-  id <- as.data.frame(c(1:nrow(data)))
-  names(id) <- "id"
-  eff_vector <- cbind(id, eff_vector)
-
-  ranking_order <- eff_vector[order(eff_vector$eff_vector, decreasing = TRUE), ]
-
-#   # ----------------------------------------------------------------------------
-#   # to get probabilities scenarios ---------------------------------------------
-#   # ----------------------------------------------------------------------------
-#   data_scenario_list <- list()
-#   metrics_list <- list()
-#   peer_list <- list()
-#   peer_weight_list <- list()
-#   na_count_list <- list()
-#   n_not_prob_list <- list()
-#
-#   for (e in 1:length(efficiency_thresholds)) {
-#     message(paste("efficiency_thresholds: ", efficiency_thresholds[e]))
-#
-#     data_scenario <- compute_target(
-#       data = data[,setdiff(names(train_data), "class_efficiency")],
-#       x = x,
-#       y = y,
-#       final_model = final_model,
-#       cut_off = efficiency_thresholds[e],
-#       imp_vector = result_importance
-#     )
-#
 #     if(all(is.na(data_scenario$data_scenario))) {
 #       print("all na")
 #       browser()
@@ -318,7 +289,7 @@ browser()
 #     count_na = na_count_list,
 #     n_not_prob_list = n_not_prob_list
 #   )
-#
-#   return(final_model)
+
+  return(final_model)
 
 }

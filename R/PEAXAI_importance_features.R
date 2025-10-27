@@ -1,26 +1,68 @@
-#' @title Training Classification Models to Estimate Efficiency
+#' @title Global feature importance for efficiency classifiers
 #'
 #' @description
-#' Trains one or multiple classification algorithms to identify Pareto-efficient
-#' decision-making units (DMUs). It jointly searches model hyperparameters and the
-#' class-balancing level (e.g., synthetic samples via SMOTE) using k-fold cross-
-#' validation or a train/validation/test split, selecting the configuration that
-#' maximizes the specified metric(s). Returns, for each technique, the best fitted
-#' model together with training summaries, performance metrics, and the selected
-#' balancing level.
+#' Computes **global feature importance** for a fitted classification model that
+#' separates Pareto-efficient DMUs, using one of three XAI backends:
+#' \itemize{
+#'   \item \code{"SA"} — Sensitivity Analysis via \pkg{rminer}.
+#'   \item \code{"SHAP"} — Model-agnostic SHAP approximations via \pkg{fastshap}.
+#'   \item \code{"PI"} — Permutation Importance via \pkg{iml}.
+#' }
+#' You can evaluate the model on either the training domain (\code{background = "train"})
+#' or the real-world domain (\code{background = "real"}) and compute importance on a
+#' chosen \code{target} set (\code{"train"} or \code{"real"}). Importances are
+#' returned normalized to sum to 1.
 #'
-#' @param data A \code{data.frame} or \code{matrix} containing the variables in the model.
-#' @param x Column indexes of input variables in \code{data}.
-#' @param y Column indexes of output variables in \code{data}.
-#' @param final_model A model fitted to use.
-#' @param background The data samples used to define the model’s background distribution. Use the training set ("train") to reflect the distribution the model learned from, or the real-world data ("real") to assess model robustness under the actual data domain.
-#' @param target The data to be explained/evaluated by the model. Selecting "train" allows understanding how the model makes decisions, while selecting "real" focuses on analyzing the underlying nature of the problem.
-#' @param importance_method A \code{data.frame} with the technique and parameters.
+#' @param data A \code{data.frame} (or \code{matrix}) with predictors and outcomes.
+#'   The function will internally reorder columns to \code{c(x, y)}.
+#' @param x Integer or character vector with the columns used as **inputs** (predictors).
+#' @param y Integer or character vector with the columns used as **outputs** (targets used
+#'   to define \code{class_efficiency} in training; not included in \code{X} when explaining).
+#' @param final_model A fitted model. If it is a base-\code{glm} binomial, probabilities
+#'   are obtained with \code{type = "response"}; otherwise the function expects
+#'   \code{predict(type = "prob")} with a column named \code{"efficient"}.
+#' @param background Character, \code{"train"} (default) or \code{"real"}.
+#'   Background data define the distribution used for the reference model behaviour.
+#' @param target Character, \code{"train"} (default) or \code{"real"}.
+#'   Dataset on which importance is computed.
+#' @param importance_method A named list (or data.frame-like) with the backend and its args:
+#'   \describe{
+#'     \item{\code{name}}{One of \code{"SA"}, \code{"SHAP"}, \code{"PI"}.}
+#'     \item{\code{method}}{(SA) One of \code{"1D-SA"}, \code{"sens"}, \code{"DSA"}, \code{"MSA"}, \code{"CSA"}, \code{"GSA"}.}
+#'     \item{\code{measures}}{(SA) e.g. \code{"AAD"}, \code{"gradient"}, \code{"variance"}, \code{"range"}.}
+#'     \item{\code{levels}}{(SA) Discretization levels used by \code{rminer::Importance}.}
+#'     \item{\code{baseline}}{(SA) Baseline value for SA, if applicable.}
+#'     \item{\code{nsim}}{(SHAP) Number of Monte Carlo samples for \code{fastshap::explain}.}
+#'     \item{\code{n.repetitions}}{(PI) Number of permutations per feature for \code{iml::FeatureImp}.}
+#'   }
 #'
+#' @details
+#' Internally, the function builds background/target sets with \code{xai_prepare_sets()}.
+#' For \code{glm} models, the positive class is assumed to be the **second level**
+#' (\code{"efficient"}) and probabilities are extracted with \code{type = "response"}.
+#' For other models (e.g., \pkg{caret}), \code{predict(type = "prob")[, "efficient"]} is used.
+#'
+#' @return A named numeric vector (or 1-row data.frame) of normalized importances,
+#'   with names matching the predictor columns; the values sum to 1.
+#'
+#' @examples
+#' \dontrun{
+#' imp <- PEAXAI_global_importance(
+#'   data = df, x = x_idx, y = y_idx, final_model = fit,
+#'   background = "real", target = "real",
+#'   importance_method = list(name = "PI", n.repetitions = 10)
+#' )
+#' print(imp)
+#' }
+#'
+#' @seealso \code{\link[fastshap]{explain}}, \code{\link[iml]{FeatureImp}},
+#'   \code{\link[rminer]{Importance}}
+#'
+#' @importFrom stats predict glm
 #' @importFrom fastshap explain
-#'
-#'
-#' @return A \code{"cafee"} object.
+#' @importFrom iml FeatureImp Predictor
+#' @importFrom rminer Importance
+#' @importFrom pROC auc
 #'
 #' @export
 
@@ -34,114 +76,95 @@ PEAXAI_global_importance <- function(
   x <- 1:(ncol(data) - length(y))
   y <- (length(x) + 1):ncol(data)
 
-
   # ----------------------------------------------------------------------------
   # detecting importance variables ---------------------------------------------
   # ----------------------------------------------------------------------------
   # type of prediction
-  if (class(final_model)[1] == "train") {
-    # type if is a ML model
-    type <- "prob"
-  } else {
-    browser()
+  if (inherits(final_model, "glm")) {
     # type if is a glm model
     type <- "response"
+    levels_order <- c("not_efficient", "efficient")
+  } else {
+    # type if is a ML model
+    type <- "prob"
+    levels_order <- c("efficient", "not_efficient")
   }
 
-  # domain set; by default is "train"
-  if (background == "train") {
+  # prepare datasets, what is going to explain
+  xai_prepare_sets <- xai_prepare_sets(
+    data = data,
+    x = x,
+    y = y,
+    final_model = final_model,
+    background = background,
+    target = target,
+    type = type,
+    threshold  = 0.5,
+    levels_order = levels_order
+  )
 
-    # a ML model train by caret
-    if (class(final_model)[1] == "train") {
-
-      # save train data, change name and position
-      train_data <- final_model[["trainingData"]]
-      names(train_data)[1] <- "class_efficiency"
-
-      train_data <- train_data[,c(2:length(train_data),1)]
-
-    } else {
-
-      browser()
-    }
-
-  } else if (background == "real") {
-
-    # The training set is the dataset passed via data
-    train_data <- data[,c(x,y)]
-    train_data$class_efficiency <- predict(
-      object = final_model,
-      newdata = train_data,
-      type = type)[,1]
-
-    train_data$class_efficiency <- ifelse(train_data$class_efficiency > 0.5, "efficient", "not_efficient")
-
-  }
-
-  # target data set; by default is "train"
-  if (target == "train") {
-
-    # a ML model train by caret
-    if (class(final_model)[1] == "train") {
-
-      # save train data, change name and position
-      target_data <- final_model[["trainingData"]]
-      names(target_data)[1] <- "class_efficiency"
-
-      target_data <- target_data[,c(2:length(target_data),1)]
-
-    } else {
-
-      browser()
-    }
-
-  } else if (target == "real") {
-
-    # The training set is the dataset passed via data
-    target_data <- data[,c(x,y)]
-    target_data$class_efficiency <- predict(
-      object = final_model,
-      newdata = target_data,
-      type = type)[,1]
-
-    target_data$class_efficiency <- ifelse(target_data$class_efficiency > 0.5, "efficient", "not_efficient")
-  }
+  train_data <- xai_prepare_sets[["train_data"]]
+  target_data <- xai_prepare_sets[["target_data"]]
 
   # methods XAI
   if (importance_method[["name"]] == "SA") {
-#
-#     # importance with our model of Caret
-#     mypred <- function(M, data) {
-#       return (predict(M, data[-length(data)], type = type))
-#     }
-#
-#     # Define methods and measures
-#     methods_SA <- c("1D-SA") # c("1D-SA", "sens", "DSA", "MSA", "CSA", "GSA")
-#     measures_SA <- c("AAD") #  c("AAD", "gradient", "variance", "range")
-#
-#     levels <- 7
+
+    # importance with our model of Caret
+    f_pred <- function(object, newdata) {
+
+      if (inherits(object, "glm")) {
+        predict(object, newdata = newdata, type = type)
+      } else {
+        predict(object, newdata = newdata, type = type)[, "efficient"]
+      }
+
+    }
+
+    # Define methods and measures
+    method <- importance_method[["method"]]  # c("1D-SA", "sens", "DSA", "MSA", "CSA", "GSA")
+    measure <- importance_method[["measures"]] #  c("AAD", "gradient", "variance", "range")
+
+    levels <- importance_method[["levels"]]
+
+    # matrix of data without label
+    if(target == "real") {
+      dataset_chosen <- target_data[, setdiff(names(target_data), "class_efficiency"), drop = FALSE]
+    } else {
+      dataset_chosen <- train_data[, setdiff(names(train_data), "class_efficiency"), drop = FALSE]
+    }
+
+    imp <- rminer::Importance(
+      M = final_model,
+      data = dataset_chosen,
+      RealL = levels,
+      method = method,
+      measure = measure,
+      baseline = importance_method[["baseline"]],
+      responses = TRUE,
+      PRED = f_pred)[["imp"]]
+
+    imp <- as.data.frame(t(imp))
+
+    names(imp) <- names(dataset_chosen)
+
+    # Normalize
+    importance <- imp
 
   } else if (importance_method[["name"]] == "SHAP") {
 
-    # the fisrt level is efficient
-    train_data$class_efficiency <- factor(
-      train_data$class_efficiency,
-      levels = c("efficient","not_efficient")
-    )
-
-    # the fisrt level is efficient
-    target_data$class_efficiency <- factor(
-      target_data$class_efficiency,
-      levels = c("efficient","not_efficient")
-    )
-
     # matrix of data without label
-    train_data <- train_data[, setdiff(names(train_data), "class_efficiency"), drop = FALSE]
     target_data <- target_data[, setdiff(names(target_data), "class_efficiency"), drop = FALSE]
+    train_data <- train_data[, setdiff(names(train_data), "class_efficiency"), drop = FALSE]
 
     # predict efficiency
     f_pred <- function(object, newdata) {
-      predict(object, newdata = newdata, type = type)[, "efficient"]
+
+      if (inherits(object, "glm")) {
+        predict(object, newdata = newdata, type = type)
+      } else {
+        predict(object, newdata = newdata, type = type)[, "efficient"]
+      }
+
     }
 
     #
@@ -163,75 +186,102 @@ PEAXAI_global_importance <- function(
     imp_norm <- imp / sum_imp
     importance <- imp_norm
 
-  } else if (importance_method == "PI") {
-
-    # the fisrt level is efficient
-    train_data$class_efficiency <- factor(
-      train_data$class_efficiency,
-      levels = c("efficient","not_efficient")
-    )
+  } else if (importance_method[["name"]] == "PI") {
 
     # matrix of data without label
-    X <- train_data[, setdiff(names(train_data), "class_efficiency"), drop = FALSE]
+    if(target == "real") {
 
-    # 3) Wrapper de predicción: devuelve P(clase positiva)
-    #    (robusto al nombre de columna por si cambiaste niveles después de entrenar)
+      labels_DEA <- target_data$class_efficiency
+      dataset_chosen <- target_data[, setdiff(names(target_data), "class_efficiency"), drop = FALSE]
+    } else {
+
+      labels_DEA <- train_data$class_efficiency
+      dataset_chosen <- train_data[, setdiff(names(train_data), "class_efficiency"), drop = FALSE]
+    }
+
+    # predict efficiency
     f_pred <- function(object, newdata) {
 
-      pr <- as.data.frame(predict(object, newdata = newdata, type = "prob"))
-
-      pos_col <- if ("efficient" %in% names(pr)) {
-        "efficient"
+      if (inherits(object, "glm")) {
+        predict(object, newdata = newdata, type = type)
       } else {
-          names(pr)[1]
+        predict(object, newdata = newdata, type = type)[, "efficient"]
       }
-
-
-      as.numeric(pr[[pos_col]])
 
     }
 
     # 4) Construir el Predictor de iml
     pred_obj <- iml::Predictor$new(
       model = final_model,
-      data = X,
-      y = train_data$class_efficiency,
+      data = dataset_chosen,
+      y = labels_DEA,
       predict.function = f_pred,
-      type = "prob"
+      type  = "classification"
     )
 
     # Loss Function by AUC
-    loss_auc <- function(truth, estimate) {
+    if (inherits(final_model, "glm")) {
 
-      # truth puede venir como factor → lo mapeamos a 0/1 con positivo = 1
-      y_bin <- if (is.factor(truth)) as.numeric(truth == levels(truth)[1]) else as.numeric(truth)
+      loss_auc <- function(truth, estimate) {
 
-      if (length(unique(y_bin)) < 2) return(NA_real_)  # guardia por si algún bloque queda con 1 sola clase
+        # change to 0/1
+        y_bin <- as.numeric(truth == levels(truth)[2])
 
-      1 - as.numeric(pROC::auc(response = y_bin, predictor = estimate))
+        if (length(unique(y_bin)) < 2) return(NA_real_)
+
+        1 - as.numeric(pROC::auc(response = y_bin, predictor = estimate))
+
+      }
+
+    } else {
+
+      loss_auc <- function(truth, estimate) {
+
+        # change to 0/1
+        y_bin <- as.numeric(truth == levels(truth)[1])
+
+        if (length(unique(y_bin)) < 2) return(NA_real_)
+
+        1 - as.numeric(pROC::auc(response = y_bin, predictor = estimate))
+
+      }
 
     }
 
     # 6) Permutation Importance (repite permutaciones para estabilidad)
-    set.seed(0)
-    fi <- FeatureImp$new(
+
+    fi <- iml::FeatureImp$new(
       predictor = pred_obj,
       loss = loss_auc,
       compare = "difference",      # caída de rendimiento vs. modelo completo
-      n.repetitions = 30           # sube si quieres más estabilidad
+      n.repetitions = importance_method[["n.repetitions"]] # sube si quieres más estabilidad
     )
 
-    # 7) Tabla de importancias y normalización (mismo formato que usabas con SHAP)
-    imp <- fi$results[, c("feature", "importance")]
-    imp <- imp[order(-imp$importance), , drop = FALSE]
-    imp$importance_norm <- imp$importance / sum(imp$importance, na.rm = TRUE)
+    order_names <- names(dataset_chosen)
+    idx <- match(order_names, fi$results$feature)
 
-    importance <- imp$importance_norm
-    importance
+    imp <- fi$results[idx, "importance"]
+
+    imp <- as.data.frame(t(imp))
+
+    names(imp) <- names(dataset_chosen)
+
+    # Normalize
+    sum_imp <- sum(imp)
+    imp_norm <- imp / sum_imp
+    importance <- imp_norm
   }
 
   result_importance <- importance
 
+  # messages
+  if(inherits(final_model, "glm")) {
+    name_ML_method <- "glm"
+  } else {
+    name_ML_method <- final_model[["method"]]
+  }
+
+  message(paste0("XAI method: ", importance_method[["name"]], " | Classification model: '", name_ML_method,"'"))
   message(paste("Inputs importance: ", round(sum(result_importance[1:length(x)]), 5)))
   message(paste("Outputs importance: ", round(sum(result_importance[(length(x)+1):(length(c(x, y)))]),5)))
 
