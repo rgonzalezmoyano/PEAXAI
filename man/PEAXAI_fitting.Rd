@@ -8,22 +8,21 @@ PEAXAI_fitting(
   data,
   x,
   y,
-  RTS,
+  RTS = "vrs",
+  imbalance_rate = NULL,
   trControl,
   methods,
-  metric_priority,
-  importance_method,
-  hold_out,
-  imbalance_rate = 0,
-  scenarios = 0.75
+  metric_priority = "Balanced Accuracy",
+  hold_out = NULL,
+  verbose = FALSE
 )
 }
 \arguments{
 \item{data}{A \code{data.frame} or \code{matrix} containing the variables in the model.}
 
-\item{x}{Column indexes of input variables in \code{data}.}
+\item{x}{Integer vector with column indices of input variables in \code{data}.}
 
-\item{y}{Column indexes of output variables in \code{data}.}
+\item{y}{Integer vector with column indices of output variables in \code{data}.}
 
 \item{RTS}{Text string or number defining the underlying DEA technology /
 returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
@@ -36,33 +35,29 @@ returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 \item{\code{5} / \code{"add"}}{Additivity (scaling up and down, but only with integers), and free disposability.}
 }}
 
-\item{trControl}{Parameters for controlling the training process (from the \code{'caret'} package).}
+\item{imbalance_rate}{Optional target(s) for class balance via SMOTE. If \code{NULL},
+no synthetic balancing is performed.}
+
+\item{trControl}{A \code{caret::trainControl}-like list that specifies the resampling
+strategy; recognized values for \code{$method} include \code{"cv"}, \code{"test_set"},
+and \code{"none"}. See \pkg{caret} documentation.}
 
 \item{methods}{A \code{list} of selected machine learning models and their hyperparameters.}
 
 \item{metric_priority}{A \code{string} specifying the summary metric for classification to select the optimal model. Default includes \code{"Balanced_accuracy"} due to (normally) unbalanced data.}
 
-\item{importance_method}{A \code{string} specifying the method to determine the relative importance of variables. Default includes \code{"SHAP"}.}
+\item{hold_out}{Numeric proportion in (0,1) for validation split (default \code{NULL}).
+If \code{NULL}, training and validation use the same data.}
 
-\item{hold_out}{A \code{number} value (5-20) for validation data percentage during training (default: 0.2).}
-
-\item{imbalance_rate}{Indicate the number of efficient and not efficient units.}
-
-\item{scenarios}{Level of efficiency to peer.}
-
-\item{test_hold_out}{A \code{number} value (5-20) for validation data percentage during training (default: 0.2).}
-
-\item{convexity}{A \code{logical} value indicating if a convex technology is assumed.}
-
-\item{returns}{Type of returns to scale.}
+\item{verbose}{Logical; if \code{TRUE}, prints progress messages (default \code{FALSE}).}
 }
 \value{
-A \code{"cafee"} object.
+A \code{"PEAXAI"} (list) with the best technique, best fitted models and their performance and the results by fold.
 }
 \description{
 Trains one or multiple classification algorithms to identify Pareto-efficient
 decision-making units (DMUs). It jointly searches model hyperparameters and the
-class-balancing level (e.g., synthetic samples via SMOTE) using k-fold cross-
+class-balancing level (synthetic samples via SMOTE) using k-fold cross-
 validation or a train/validation/test split, selecting the configuration that
 maximizes the specified metric(s). Returns, for each technique, the best fitted
 model together with training summaries, performance metrics, and the selected

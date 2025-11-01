@@ -1,37 +1,58 @@
-#' @title Data Preprocessing and Efficiency Labeling Using DEA
+#' @title Data preprocessing and efficiency labeling with Additive DEA
 #'
-#' @description This function uses classification algorithms to estimate the efficiency of a set of DMUs (Decision Making Units).
+#' @description
+#' Labels each DMU (Decision Making Unit) as efficient or not using the
+#' Additive DEA model, optionally after basic data preprocessing. The resulting
+#' factor \code{class_efficiency} has levels \code{c("not_efficient","efficient")},
+#' where \code{"efficient"} is the positive class for downstream modeling.
 #'
-#' @param data A \code{data.frame} or \code{matrix} containing the variables in the model.
-#' @param x Column indexes of input variables in \code{data}.
-#' @param y Column indexes of output variables in \code{data}.
-#' @param RTS Text string or number defining the underlying DEA technology /
-#'   returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
+#' @param data A \code{data.frame} or \code{matrix} containing all variables.
+#' @param REF Optional reference set of inputs that defines the technology
+#'   (defaults to the columns indicated by \code{x} in \code{data}). Must have
+#'   the same number of rows as \code{data}.
+#' @param x Integer vector with column indices of input variables in \code{data}.
+#' @param y Integer vector with column indices of output variables in \code{data}.
+#' @param RTS Character or integer specifying the DEA technology / returns-to-scale
+#'   assumption (default: \code{"vrs"}). Accepted values:
 #'   \describe{
-#'     \item{\code{0} / \code{"fdh"}}{Free disposability hull, no convexity assumption.}
-#'     \item{\code{1} / \code{"vrs"}}{Variable returns to scale, convexity and free disposability.}
-#'     \item{\code{2} / \code{"drs"}}{Decreasing returns to scale, convexity, down-scaling and free disposability.}
-#'     \item{\code{3} / \code{"crs"}}{Constant returns to scale, convexity and free disposability.}
-#'     \item{\code{4} / \code{"irs"}}{Increasing returns to scale (up-scaling, not down-scaling), convexity and free disposability.}
-#'     \item{\code{5} / \code{"add"}}{Additivity (scaling up and down, but only with integers), and free disposability.}
+#'     \item{\code{0} / \code{"fdh"}}{Free disposability hull (no convexity).}
+#'     \item{\code{1} / \code{"vrs"}}{Variable returns to scale (convexity + free disposability).}
+#'     \item{\code{2} / \code{"drs"}}{Decreasing returns to scale (convexity, down-scaling, free disposability).}
+#'     \item{\code{3} / \code{"crs"}}{Constant returns to scale (convexity + free disposability).}
+#'     \item{\code{4} / \code{"irs"}}{Increasing returns to scale (up-scaling only, convexity + free disposability).}
+#'     \item{\code{5} / \code{"add"}}{Additivity (integer up/down scaling) with free disposability.}
 #'   }
+#'
+#' @details
+#' Internally relies on \code{\link[Benchmarking]{dea.add}} to compute Additive DEA
+#' scores and derive the binary efficiency label.
 #'
 #' @importFrom Benchmarking dea.add
 #'
-#' @return A \code{data.frame} identical to \code{data} (keeping all input \code{x} and output \code{y} columns) plus a new factor column \code{class_efficiency} with levels \code{c("not_efficient","efficient")}. The second level (\code{"efficient"}) is the positive class used in modeling.
+#' @return
+#' A \code{data.frame} equal to \code{data} (retaining all input \code{x} and
+#' output \code{y} columns) plus a new factor column \code{class_efficiency}
+#' with levels \code{c("not_efficient","efficient")}.
+#'
+#' @seealso \code{\link[Benchmarking]{dea.add}}
+#'
+#' @examples
+#' # Example (assuming columns 1:2 are inputs and 3 is output):
+#' # out <- my_fun(data = df, x = 1:2, y = 3, RTS = "vrs")
+#' # table(out$class_efficiency)
 #'
 #' @export
 
 label_efficiency <- function (
-    data, x, y, RTS = "vrs"
-    ) {
+    data, REF = data, x, y, RTS = "vrs"
+  ) {
 
   # benchmarking to calculate additive-DEA
   add_scores <- dea.add(
     X = as.matrix(data[,x]),
     Y = as.matrix(data[,y]),
-    XREF = as.matrix(data[,x]),
-    YREF = as.matrix(data[,y]),
+    XREF = as.matrix(REF[,x]),
+    YREF = as.matrix(REF[,y]),
     RTS = RTS
   )[["sum"]]
 

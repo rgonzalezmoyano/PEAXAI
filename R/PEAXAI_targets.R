@@ -241,17 +241,18 @@ PEAXAI_targets <- function (
           )
 
         } else {
-          browser()
+
           change_x <- matrix(
-            data = rep(vector_gx[i,], each =  nrow(changes)),
+            data = unlist(vector_gx[i,]),
             nrow = nrow(changes),
-            ncol = length(vector_gx)
+            ncol = length(vector_gx),
+            byrow = TRUE
           )
 
           change_y <- matrix(
-            data = rep((-data[i,y]) * vector_gy, each =  nrow(matrix_eff)),
-            nrow = nrow(matrix_eff),
-            ncol = length(mean_y)
+            data = unlist(vector_gy[i,]),
+            nrow = nrow(changes),
+            ncol = length(vector_gy)
           )
 
         }
@@ -277,7 +278,7 @@ PEAXAI_targets <- function (
 
           matrix_eff[, y] <- data[i, y]
           matrix_eff[, y] <- sweep(change_y, 1, range_beta, "*") + matrix_eff[, y]
-# dfdfdf
+
           # know if there are not possible values
           mx <- as.matrix(matrix_eff[, x, drop = FALSE])
           min_x_possible_vector <- as.numeric(min_x_possible*min_x)
@@ -368,7 +369,8 @@ PEAXAI_targets <- function (
               if (length(pos) > 1) {
                 pos <- pos[1]
               } else if (length(pos) == 0) {
-                pos <- 0
+                idx_max <- which(eff_vector == max(eff_vector))
+                pos <- idx_max[1]
               }
 
               if (is.na(pos)) {
@@ -389,17 +391,17 @@ PEAXAI_targets <- function (
                 pred <- as.data.frame(data_scenario[i,variables])
                 names(pred) <- names(data)
 
-                if (inherits(final_model, "train")) {
-                  pred_max <- unlist(predict(final_model, row_df, type = "prob")[1])
-                } else if (inherits(final_model, "glm")) {
-                  pred_max <- unlist(predict(final_model, row_df, type = "response")[1])
-                }
+                # if (inherits(final_model, "train")) {
+                #   pred_max <- unlist(predict(final_model, pred, type = "prob")[1])
+                # } else if (inherits(final_model, "glm")) {
+                #   pred_max <- unlist(predict(final_model, pred, type = "response")[1])
+                # }
 
-                betas[i, 2] <- pred_max
+                betas[i, 2] <- eff_vector[pos]
                 break
 
               } else if (pos < 1) {
-
+                browser()
                 # if position is before the minimum beta
                 pos <- 1
 

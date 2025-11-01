@@ -45,7 +45,7 @@ get_SMOTE_DMUs <- function (
       nrow = 0
     ))
 
-    names(save_dataset) <- names(copy_data[[1]])
+    names(save_dataset) <- names(copy_data)
 
     # check if it is possible to balance
     if(nrow(facets) == 0) {
@@ -182,7 +182,7 @@ get_SMOTE_DMUs <- function (
         idx <- na.omit(idx)
 
       } else if ((nrow(combinations) - length(n_idx)) < create_ineff &
-                   nrow(combinations) == length(n_idx)){
+                   nrow(combinations) == length(n_idx)) {
 
         print("No possible create not efficient units")
 
@@ -215,15 +215,28 @@ get_SMOTE_DMUs <- function (
     # as data.frame
     results_convx <- as.data.frame(results_convx)
 
-    # check all convex are efficient
-    check_results_convx <- which(
-      dea.add(
-        X = as.matrix(results_convx[,x]),
-        Y = as.matrix(results_convx[,y]),
-        XREF = as.matrix(data_eff[,x]),
-        YREF = as.matrix(data_eff[,y]),
-        RTS = RTS
-      )[["sum"]] < 0.0001)
+    if (sense_balance == "efficient") {
+      # check all convex are efficient
+      check_results_convx <- which(
+        dea.add(
+          X = as.matrix(results_convx[,x]),
+          Y = as.matrix(results_convx[,y]),
+          XREF = as.matrix(data_eff[,x]),
+          YREF = as.matrix(data_eff[,y]),
+          RTS = RTS
+        )[["sum"]] < 0.0001)
+    } else {
+      # check all convex are not efficient
+      check_results_convx <- which(
+        dea.add(
+          X = as.matrix(results_convx[,x]),
+          Y = as.matrix(results_convx[,y]),
+          XREF = as.matrix(data_eff[,x]),
+          YREF = as.matrix(data_eff[,y]),
+          RTS = RTS
+        )[["sum"]] > 0.0001)
+    }
+
 
     # save only efficient
     results_convx <- results_convx[check_results_convx, ]

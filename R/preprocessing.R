@@ -1,4 +1,4 @@
-#' @title Handle Errors on PEAXAI_fitting
+#' @title Handle Errors on PEAXAI
 #'
 #' @description This function check if PEAXAI arguments are well introduced and check if the analysis it will be done.
 #'
@@ -6,103 +6,124 @@
 #' @param x Column indexes of input variables in \code{data}.
 #' @param y Column indexes of output variables in \code{data}.
 #'
-#' @importFrom caret trainControl
-#'
 #' @return It returns a \code{matrix} in the required format and displays some error messages.
 
 # check if parameters are well introduced
-validate_fitting_args <- function (
-  data, x, y, RTS, trControl, methods,
-  metric, importance_method, hold_out,
-  balance_data, scenarios
-  ) {
+validate_parametes <- function(
+  # PEAXAI_fitting
+  data, x, y, RTS, trControl, methods, metric_priority,
+  hold_out, imbalance_rate, verbose
+
+) {
 
   # data
-  if (!is.data.frame(data)) {
-    stop("The argument 'data' has to be a dataframe or matrix.")
+  if (is.null(data)) {
+    stop("'data' must be a data.frame or matrix; got NULL.", call. = FALSE)
+  }
+
+  if (!is.data.frame(data) && !is.matrix(data)) {
+    stop("'data' must be a data.frame or matrix.", call. = FALSE)
+  }
+
+  if (nrow(data) == 0L || nrow(data) == 0L) {
+    stop("'data' has zero rows or zero columns.", call. = FALSE)
   }
 
   # x and y
-  if (!(is.vector(x) || is.vector(y))) {
+  if (!(is.numeric(x) || is.numeric(y))) {
 
-    stop("The arguments 'x' and 'y' must be vectors containing the indexes or names of the input and output variables, respectively.")
+    stop("The arguments 'x' and 'y' must be vectors containing the indexes of the input and output variables, respectively.", call. = FALSE)
 
   } else {
 
     # same index or names
     if(any(x %in% y)) {
-      stop("There are one or more variables that are included as inputs and outputs at the same time. The arguments 'x' and 'y' must not overlap.")
+      stop("There are one or more variables that are included as inputs and outputs at the same time. The arguments 'x' and 'y' must not overlap.", call. = FALSE)
     }
-
 
   }
 
   # RTS
-  RTS_available <- c(
-    0, "fdh",
-    1, "vrs",
-    2, "drs",
-    3, "crs",
-    4, "irs",
-    5, " add"
-  )
+  RTS_available_num <- c(0,1,2,3,4,5)
+  RTS_available_char <- c("fdh", "vrs", "drs", "crs", "irs", "add")
 
-  if(!RTS %in% RTS_available) {
-    stop("The argument 'RTS' has to be one of the RTS available on the function 'dea.add' from Benchmarking package.")
-  }
-
-  # trControl
-  if(!class(trControl) == "list") {
-    stop("The argument 'trControl' has to be an object type 'list'. The list has to indicate how the hyperparameters will be chosen.")
-  } else {
-
-    # no cross-validation
-    if(trControl[["method"]] == "none") {
-
-      # no test set
-      if(!is.null(trControl[["test_hold_out"]])) {
-        warning("Due to the 'method' is 'none', the value 'test_hold_out' in 'trControl' will be ignored (treated as NULL).")
-      }
-
-      warning("No test set is being used to select/tune the best hyperparameters. ",
-              "Model performance will be estimated on the training/validation data only, ",
-              "which increases the risk of overfitting.")
-
-
-    } else if (trControl[["method"]] == "test_set") {
-
-      # no test set
-      if(is.null(trControl[["test_hold_out"]])) {
-        stop("If 'method' is 'test_hold_out', you must specify the proportion of the test set.")
-      }
-
-
-    } else if (trControl[["method"]] == "cv") {
-
+  if (is.numeric(RTS)) {
+    if(!RTS %in% RTS_available_num) {
+      stop("The argument 'RTS' has to be one of the RTS available on the function 'dea.add' from Benchmarking package.", call. = FALSE)
+    }
+  } else if (is.character(RTS)) {
+    if(!RTS %in% RTS_available_char) {
+      stop("The argument 'RTS' has to be one of the RTS available on the function 'dea.add' from Benchmarking package.", call. = FALSE)
     }
   }
 
 
-  # methods
+  # imbalance_rate
+  if (!is.null(imbalance_rate)) {
 
-  # metric
+    if (!is.numeric(imbalance_rate)) {
+      stop(
+        "'imbalance_rate' must be a numeric vector.",
+        call. = FALSE
+      )
+    }
 
-  # importance_method
+    if (any(imbalance_rate <= 0 | imbalance_rate >= 1)) {
+      stop(
+        "All values in 'imbalance_rate' must be strictly between 0 and 1. (e.g., seq(0.1, 0.5, 0.1)",
+        call. = FALSE
+      )
+    }
 
-  # hold_out
+  }
 
-  # balance_data
+  # trControl
+  if (is.null(trControl) | (is.list(trControl) & length(trControl) == 0L)) {
+    stop("'trControl' must be specified (e.g., list(method = 'cv', number = 5)).", call. = FALSE)
+  }
 
-  # scenarios
-  # print("end")
+  method_available <- c("test_set", "cv")
+
+  if (!is.character(trControl[["method"]]) | length(trControl[["method"]]) != 1L | !(trControl[["method"]] %in% method_available)) {
+    stop(
+      sprintf("`trControl$method` must be one of: %s.",
+              paste(shQuote(method_available), collapse = ", ")),
+      call. = FALSE
+    )
+  }
+
+  # no cross-validation
+  if (trControl[["method"]] == "test_set") {
+
+    # no test set
+    if(is.null(trControl[["test_hold_out"]])) {
+      warning(
+        "'trControl$test_hold_out' is NULL: the dataset supplied in `data` will be used to evaluate model performance (no hold-out split).",
+        call. = FALSE
+      )
+    } else {
+
+      if(!is.numeric(trControl[["test_hold_out"]])) {
+        stop(
+          "'trControl$test_hold_out' must be a single numeric value strictly between 0 and 1.",
+          call. = FALSE
+        )
+      }
+
+      if(trControl[["test_hold_out"]] <= 0 & trControl[["test_hold_out"]] >= 1) {
+        stop(
+          "'trControl$test_hold_out' must be strictly between 0 and 1.",
+          call. = FALSE
+        )
+      }
+
+    }
+
+  } else if (trControl[["method"]] == "cv") {
+
+  }
+
 }
-
-
-
-
-
-
-
 
 #' @title Prepare Data and Handle Errors
 #'
