@@ -1,18 +1,46 @@
-#' @title Training a Classification Machine Learning Model
+#' @title Prepare Training and Target Datasets from a caret Model
 #'
-#' @description This function trains a set of models and selects best hyperparameters for each of them.
+#' @description
+#' Extracts and formats the training and/or target datasets from a machine learning model trained with \code{caret::train},
+#' allowing for distinction between using the full training data or only the original subset used for modeling.
+#' It standardizes the class column to be named \code{"class_efficiency"} and positions it as the last column.
 #'
-#' @param data A \code{data.frame} or \code{matrix} containing the variables in the model.
-#' @param method Parameters for controlling the training process (from the \code{'caret'} package).
-#' @param arguments A \code{list} of selected machine learning models and their hyperparameters.
-#' @param hyparameter A \code{list}
-#' @param metric A \code{string} specifying the summary metric for classification to select the optimal model. Default includes \code{"Balanced_accuracy"} due to (normally) unbalanced data.
-
+#' @param data A \code{data.frame} containing the original dataset used to train the model. Only needed when using \code{"real"} as background or target.
+#' @param x Not currently used. Reserved for future input variable selection.
+#' @param y Not currently used. Reserved for future output variable specification.
+#' @param final_model A trained model object of class \code{"train"} from the \pkg{caret} package.
+#' @param background A character string, either \code{"train"} or \code{"real"}, specifying the background dataset used for explainability.
+#' @param target A character string, either \code{"train"} or \code{"real"}, specifying the target dataset to be explained.
+#' @param type Not currently used. Reserved for future prediction types.
+#' @param threshold Not currently used. Reserved for future thresholding logic.
+#' @param levels_order A character vector specifying the levels of the response factor, typically \code{c("not_efficient", "efficient")}. Not currently used, but can help in reordering or relabeling.
 #'
-#' @importFrom caret train createFolds
-
+#' @return A \code{list} with two elements:
+#' \describe{
+#'   \item{\code{train_data}}{A \code{data.frame} representing the background dataset, with the class column renamed to \code{"class_efficiency"} and positioned last.}
+#'   \item{\code{target_data}}{A \code{data.frame} representing the target dataset, formatted in the same way.}
+#' }
 #'
-#' @return It returns a \code{list} with the chosen model.
+#' @importFrom caret train
+#'
+#' @examples
+#' \dontrun{
+#' model <- caret::train(y ~ ., data = my_data, method = "rf")
+#' result <- xai_prepare_sets(
+#'   data = my_data,
+#'   x = NULL, y = NULL,
+#'   final_model = model,
+#'   background = "train",
+#'   target = "real",
+#'   type = NULL,
+#'   threshold = NULL,
+#'   levels_order = c("not_efficient", "efficient")
+#' )
+#' str(result$train_data)
+#' str(result$target_data)
+#' }
+#'
+#' @export
 
 xai_prepare_sets <- function (
     data, x, y, final_model, background, target,
@@ -23,47 +51,23 @@ xai_prepare_sets <- function (
   if (background == "train") {
 
     # a ML model train by caret
-    if (class(final_model)[1] == "train") {
+    # save train data, change name and position
+    train_data <- final_model[["trainingData"]]
+    names(train_data)[1] <- "class_efficiency"
 
-      # save train data, change name and position
-      train_data <- final_model[["trainingData"]]
-      names(train_data)[1] <- "class_efficiency"
-
-      train_data <- train_data[,c(2:length(train_data),1)]
-
-    } else {
-      train_data <- final_model[["data"]]
-      train_data$class_efficiency <- ifelse(train_data$class_efficiency == 1, "efficient", "not_efficient")
-      train_data$class_efficiency <- factor(
-        train_data$class_efficiency,
-        levels = levels_order
-      )
-
-    }
+    train_data <- train_data[,c(2:length(train_data),1)]
 
   } else if (background == "real") {
 
     n <- nrow(data)
 
     # a ML model train by caret
-    if (inherits(final_model, "train")) {
+    # save train data, change name and position
+    train_data <- final_model[["trainingData"]][1:n,]
+    names(train_data)[1] <- "class_efficiency"
 
-      # save train data, change name and position
-      train_data <- final_model[["trainingData"]][1:n,]
-      names(train_data)[1] <- "class_efficiency"
+    train_data <- train_data[,c(2:length(train_data),1)]
 
-      train_data <- train_data[,c(2:length(train_data),1)]
-
-    } else {
-
-      train_data <- final_model[["data"]][1:n,]
-      train_data$class_efficiency <- ifelse(train_data$class_efficiency == 1, "efficient", "not_efficient")
-      train_data$class_efficiency <- factor(
-        train_data$class_efficiency,
-        levels = levels_order
-      )
-
-    }
 
   }
 
@@ -71,48 +75,22 @@ xai_prepare_sets <- function (
   if (target == "train") {
 
     # a ML model train by caret
-    if (inherits(final_model, "train")) {
+    # save train data, change name and position
+    target_data <- final_model[["trainingData"]]
+    names(target_data)[1] <- "class_efficiency"
 
-      # save train data, change name and position
-      target_data <- final_model[["trainingData"]]
-      names(target_data)[1] <- "class_efficiency"
-
-      target_data <- target_data[,c(2:length(target_data),1)]
-
-    } else {
-
-      target_data <- final_model[["data"]]
-      target_data$class_efficiency <- ifelse(target_data$class_efficiency == 1, "efficient", "not_efficient")
-      target_data$class_efficiency <- factor(
-        target_data$class_efficiency,
-        levels = levels_order
-      )
-
-    }
+    target_data <- target_data[,c(2:length(target_data),1)]
 
   } else if (target == "real") {
 
     n <- nrow(data)
 
     # a ML model train by caret
-    if (inherits(final_model, "train")) {
+    # save train data, change name and position
+    target_data <- final_model[["trainingData"]][1:n,]
+    names(target_data)[1] <- "class_efficiency"
 
-      # save train data, change name and position
-      target_data <- final_model[["trainingData"]][1:n,]
-      names(target_data)[1] <- "class_efficiency"
-
-      target_data <- target_data[,c(2:length(target_data),1)]
-
-    } else {
-
-      target_data <- final_model[["data"]][1:n,]
-      target_data$class_efficiency <- ifelse(target_data$class_efficiency == 1, "efficient", "not_efficient")
-      target_data$class_efficiency <- factor(
-        target_data$class_efficiency,
-        levels = levels_order
-      )
-
-    }
+    target_data <- target_data[,c(2:length(target_data),1)]
 
   }
 

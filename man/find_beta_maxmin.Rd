@@ -2,7 +2,7 @@
 % Please edit documentation in R/PEAXAI_targets.R
 \name{find_beta_maxmin}
 \alias{find_beta_maxmin}
-\title{Projections to the Hyperplane}
+\title{Search Range for Directional Efficiency Parameter (\eqn{\beta})}
 \usage{
 find_beta_maxmin(
   data,
@@ -18,31 +18,74 @@ find_beta_maxmin(
 )
 }
 \arguments{
-\item{data}{A \code{data.frame} or \code{matrix} containing the variables in the model.}
+\item{data}{A \code{data.frame} or \code{matrix} containing input and output variables.}
 
-\item{x}{Column indexes of input variables in \code{data}.}
+\item{x}{A numeric vector with the column indexes of input variables in \code{data}.}
 
-\item{y}{Column indexes of output variables in \code{data}.}
+\item{y}{A numeric vector with the column indexes of output variables in \code{data}.}
 
-\item{final_model}{The best-fitted model used for efficiency score computation.}
+\item{final_model}{A fitted \pkg{caret} model of class \code{"train"} that supports
+\code{predict(type = "prob")} and returns a probability column for the efficient class.}
 
-\item{efficiency_thresholds}{Probability levels for determining efficient class scores.}
+\item{efficiency_thresholds}{A numeric vector of probability levels in (0,1).
+Its minimum and maximum values delimit the target interval used to bracket \eqn{\beta}.}
 
-\item{n_expand}{n_expand}
+\item{n_expand}{Integer. Increment step size applied to \eqn{\beta} at each iteration.}
 
-\item{vector_gx}{dfd}
+\item{vector_gx}{A numeric vector or \code{data.frame} with directional changes for inputs
+(typically negative direction), usually built inside \code{PEAXAI_targets}.}
 
-\item{vector_gy}{dfdfd}
+\item{vector_gy}{A numeric vector or \code{data.frame} with directional changes for outputs
+(positive direction).}
 
-\item{max_y}{fd max_y}
+\item{max_y}{Numeric. Upper-limit multiplier for output expansion relative to observed maxima.}
 
-\item{min_x}{fd min_x}
-
-\item{directional_vector}{A \code{data.frame} with importance variables results}
+\item{min_x}{Numeric. Lower-limit multiplier for input contraction relative to observed minima.}
 }
 \value{
-A numeric vector containing the efficiency scores for each observation in the input data.
+A \code{data.frame} with two numeric columns:
+\describe{
+\item{\code{min}}{Minimum feasible value of \eqn{\beta} for each observation.}
+\item{\code{max}}{Maximum feasible value of \eqn{\beta} for each observation.}
+}
 }
 \description{
-This function computes the efficiency scores based on a given model.
+Estimates, for each observation, the minimum and maximum feasible values of the
+directional distance parameter \eqn{\beta} used in projection-based efficiency
+analysis. This function is an internal step of \code{\link{PEAXAI_targets}},
+providing the initial search bounds for the iterative determination of efficiency targets.
+}
+\details{
+For each DMU, the function expands outputs and contracts inputs along the specified
+direction until the predicted probability of efficiency (from \code{final_model})
+reaches the maximum in \code{efficiency_thresholds} or feasible domain limits.
+The resulting interval \eqn{[\beta_{\min}, \beta_{\max}]} is then used by
+\code{\link{PEAXAI_targets}} to refine projections via grid search.
+}
+\examples{
+\dontrun{
+data(firms)
+
+# Suppose 'final_model' is a caret classifier with predict(type = "prob")
+gx <- c(-0.3, -0.2, -0.1, -0.1)
+gy <- c(0.25)
+
+find_beta_maxmin(
+  data = firms,
+  x = 1:4,
+  y = 5,
+  final_model = final_model,
+  efficiency_thresholds = c(0.5, 0.9),
+  n_expand = 0.1,
+  vector_gx = gx,
+  vector_gy = gy,
+  max_y = 2,
+  min_x = 1
+)
+}
+
+}
+\seealso{
+\code{\link{PEAXAI_targets}} (efficiency projections based on \eqn{\beta});
+\code{\link[caret]{train}} (model training with class probabilities).
 }

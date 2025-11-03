@@ -2,7 +2,7 @@
 % Please edit documentation in R/xai_prepare_sets.R
 \name{xai_prepare_sets}
 \alias{xai_prepare_sets}
-\title{Training a Classification Machine Learning Model}
+\title{Prepare Training and Target Datasets from a caret Model}
 \usage{
 xai_prepare_sets(
   data,
@@ -17,19 +17,51 @@ xai_prepare_sets(
 )
 }
 \arguments{
-\item{data}{A \code{data.frame} or \code{matrix} containing the variables in the model.}
+\item{data}{A \code{data.frame} containing the original dataset used to train the model. Only needed when using \code{"real"} as background or target.}
 
-\item{method}{Parameters for controlling the training process (from the \code{'caret'} package).}
+\item{x}{Not currently used. Reserved for future input variable selection.}
 
-\item{arguments}{A \code{list} of selected machine learning models and their hyperparameters.}
+\item{y}{Not currently used. Reserved for future output variable specification.}
 
-\item{hyparameter}{A \code{list}}
+\item{final_model}{A trained model object of class \code{"train"} from the \pkg{caret} package.}
 
-\item{metric}{A \code{string} specifying the summary metric for classification to select the optimal model. Default includes \code{"Balanced_accuracy"} due to (normally) unbalanced data.}
+\item{background}{A character string, either \code{"train"} or \code{"real"}, specifying the background dataset used for explainability.}
+
+\item{target}{A character string, either \code{"train"} or \code{"real"}, specifying the target dataset to be explained.}
+
+\item{type}{Not currently used. Reserved for future prediction types.}
+
+\item{threshold}{Not currently used. Reserved for future thresholding logic.}
+
+\item{levels_order}{A character vector specifying the levels of the response factor, typically \code{c("not_efficient", "efficient")}. Not currently used, but can help in reordering or relabeling.}
 }
 \value{
-It returns a \code{list} with the chosen model.
+A \code{list} with two elements:
+\describe{
+\item{\code{train_data}}{A \code{data.frame} representing the background dataset, with the class column renamed to \code{"class_efficiency"} and positioned last.}
+\item{\code{target_data}}{A \code{data.frame} representing the target dataset, formatted in the same way.}
+}
 }
 \description{
-This function trains a set of models and selects best hyperparameters for each of them.
+Extracts and formats the training and/or target datasets from a machine learning model trained with \code{caret::train},
+allowing for distinction between using the full training data or only the original subset used for modeling.
+It standardizes the class column to be named \code{"class_efficiency"} and positions it as the last column.
+}
+\examples{
+\dontrun{
+model <- caret::train(y ~ ., data = my_data, method = "rf")
+result <- xai_prepare_sets(
+  data = my_data,
+  x = NULL, y = NULL,
+  final_model = model,
+  background = "train",
+  target = "real",
+  type = NULL,
+  threshold = NULL,
+  levels_order = c("not_efficient", "efficient")
+)
+str(result$train_data)
+str(result$target_data)
+}
+
 }

@@ -290,7 +290,7 @@ convex_facets <- function (
 
         results_convx <- as.data.frame(eff_convex)
 
-        new_eff_conx_unit <- new_results_convx[idx_eff, ]
+        new_eff_conx_unit <- results_convx[idx_eff, ]
 
       }
 

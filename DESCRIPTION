@@ -1,14 +1,60 @@
 Package: PEAXAI
-Title: What the Package Does (One Line, Title Case)
-Version: 0.0.0.9000
-Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+Title: Probabilistic Efficiency Analysis Using Explainable Artificial Intelligence (XAI)
+Version: 0.1.0
+Authors@R:
+  c(
+    person(given = "Ricardo",
+           family = "González Moyano",
+           role = c("cre", "aut"),
+           email = "ricardo.gonzalezm@umh.es",
+           comment = c(ORCID = "0009-0002-8608-5545")),
+    person(given = "Juan",
+           family = "Aparicio",
+           role = "aut",
+           comment = c(ORCID = "0000-0002-0867-0004")),
+    person(given = "José Luis",
+           family = "Zofío",
+           role = "aut",
+           comment = c(ORCID = "0000-0003-1170-9501")),
+    person(given = "Víctor",
+           family = "España",
+           role = "aut",
+           comment = c(ORCID = "0000-0002-1807-6180"))
+  )
+Description: Provides a probabilistic framework that integrates Data
+  Envelopment Analysis (DEA) with machine-learning classifiers to estimate
+  the (in)efficiency status and the probability of efficiency for
+  decision-making units. Models are trained on DEA-derived labels and
+  evaluated via 'caret', enabling explainable workflows with global
+  diagnostics (e.g., permutation importance, Shapley-value summaries via
+  'fastshap', and sensitivity analysis) and effect plots (partial and
+  accumulated dependence), probability-threshold peer selection, and
+  counterfactual improvement suggestions for benchmarking and policy
+  analysis.
+License: file LICENSE
+URL: https://github.com/rgonzalezmoyano/PEAXAI
+BugReports: https://github.com/peaxai/PEAXAI/issues
 Encoding: UTF-8
+Language: en
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
-Depends: 
-    R (>= 3.5)
-LazyData: true
+Depends:
+  R (>= 3.5)
+Imports:
+  Benchmarking,
+  caret,
+  dplyr,
+  fastshap,
+  iml,
+  PRROC,
+  pROC,
+  rminer
+Suggests:
+  ggplot2,
+  knitr,
+  rmarkdown,
+  nnet
+VignetteBuilder: knitr
+LazyData: false
+ByteCompile: true
+Config/testthat/edition: 3

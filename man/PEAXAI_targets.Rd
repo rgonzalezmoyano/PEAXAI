@@ -2,7 +2,7 @@
 % Please edit documentation in R/PEAXAI_targets.R
 \name{PEAXAI_targets}
 \alias{PEAXAI_targets}
-\title{Projections to the Hyperplane}
+\title{Projection-Based Efficiency Targets}
 \usage{
 PEAXAI_targets(
   data,
@@ -18,31 +18,84 @@ PEAXAI_targets(
 )
 }
 \arguments{
-\item{data}{A \code{data.frame} or \code{matrix} containing the variables in the model.}
+\item{data}{A \code{data.frame} or \code{matrix} containing input and output variables.}
 
-\item{x}{Column indexes of input variables in \code{data}.}
+\item{x}{A numeric vector indicating the column indexes of input variables in \code{data}.}
 
-\item{y}{Column indexes of output variables in \code{data}.}
+\item{y}{A numeric vector indicating the column indexes of output variables in \code{data}.}
 
-\item{final_model}{The best-fitted model used for efficiency score computation.}
+\item{final_model}{A fitted \pkg{caret} model of class \code{"train"} that supports
+\code{predict(type = "prob")} and returns a probability column for the efficient class.}
 
-\item{efficiency_thresholds}{Probability levels for determining efficient class scores.}
+\item{efficiency_thresholds}{A numeric vector of probability levels in (0,1)
+that define the efficiency classes (e.g., \code{c(0.75, 0.9, 0.95)}).}
 
-\item{directional_vector}{A \code{data.frame} with importance variables results}
+\item{directional_vector}{A \code{list} with the required information to
+construct the directional vector, including:
+\itemize{
+\item \code{relative_importance}: Numeric vector of variable importances that sum to 1.
+\item \code{scope}: \code{"global"} (currently supported) or \code{"local"}.
+\item \code{baseline}: \code{"mean"}, \code{"median"}, \code{"self"} or \code{"ones"}.
+}}
 
-\item{n_expand}{n_expand}
+\item{n_expand}{Numeric. Number of expansion steps used to enlarge the initial
+search range for \eqn{\beta}.}
 
-\item{n_grid}{n_grid}
+\item{n_grid}{Integer. Number of grid points evaluated during each iteration
+to refine the cutoff value of \eqn{\beta}.}
 
-\item{max_y}{fd max_y}
+\item{max_y}{Numeric. Upper-limit multiplier for output expansion in the search
+procedure (default = 2).}
 
-\item{min_x}{fd min_x}
-
-\item{z}{Column indexes of environment variables in \code{data}.}
+\item{min_x}{Numeric. Lower-limit multiplier for input contraction in the search
+procedure (default = 1).}
 }
 \value{
-A numeric vector containing the efficiency scores for each observation in the input data.
+A named \code{list} with one element per threshold. Each element contains:
+\itemize{
+\item \code{data}: A \code{data.frame} of projected input–output values at that threshold.
+\item \code{beta}: A two-column \code{data.frame} with the optimal \eqn{\beta}
+and the corresponding predicted probability.
+}
 }
 \description{
-This function computes the efficiency scores based on a given model.
+Computes efficiency projections for each observation based on a trained
+classifier from \pkg{caret} that provides class probabilities via
+\code{predict(type = "prob")}. For each probability threshold, the function
+finds the direction and magnitude of change in input–output space required
+for a unit to reach a specified efficiency level, following a directional
+distance approach.
+}
+\details{
+For each observation and for each probability level in \code{efficiency_thresholds},
+the function searches for the smallest directional distance \eqn{\beta} such that
+the predicted probability of belonging to the efficient class reaches the target.
+}
+\examples{
+\dontrun{
+data(firms)
+
+# Assume 'final_model' is a caret-trained classifier returned by PEAXAI_fitting()
+dir_vec <- list(
+  relative_importance = c(0.25, 0.25, 0.25, 0.25),
+  scope = "global",
+  baseline = "mean"
+)
+
+targets <- PEAXAI_targets(
+  data = firms,
+  x = 1:4,
+  y = 5,
+  final_model = final_model,
+  efficiency_thresholds = seq(0.75, 0.95, 0.1),
+  directional_vector = dir_vec,
+  n_expand = 0.5,
+  n_grid = 100
+)
+}
+
+}
+\seealso{
+\code{\link{find_beta_maxmin}} for initializing search bounds;
+\code{\link[caret]{train}} for model training.
 }

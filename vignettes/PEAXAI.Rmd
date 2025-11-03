@@ -1,0 +1,302 @@
+---
+title: "PEAXAI: Probabilistic Efficiency Analysis using Explainable Artificial Intelligence"
+date: "`r Sys.Date()`"
+author: "Institute 'Center of Operations Research', Miguel Hernández University of Elche"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: false
+vignette: >
+  %\VignetteIndexEntry{PEAXAI: Example with Firms}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+<style>
+  body { text-align: justify; }
+</style>
+
+```{r setup, include=FALSE}
+# Enable a "fast mode" during R CMD check to keep CRAN timings under control
+is_check <- ("CheckExEnv" %in% search()) || any(c("_R_CHECK_TIMINGS_","_R_CHECK_LICENSE_") %in% names(Sys.getenv()))
+
+# Global knitr options for compact output and consistent figures
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  warning = FALSE, message = FALSE,
+  fig.width = 7, fig.height = 4.8, dpi = 96
+)
+
+# Seed for reproducibility
+set.seed(1)
+```
+
+This vignette introduces the main functions of the `PEAXAI` package.
+
+`PEAXAI` provides a methodology that integrates Data Envelopment Analysis (DEA) with Machine Learning (ML) algorithms to train a classifier that estimates the probability that each decision-making unit (DMU) is (in)efficient.
+
+Once the model is trained, the package offers several functions for post-hoc analysis, including:
+
+- Estimating feature importance,
+- Generating counterfactual scenarios for each DMU — that is, determining the minimum changes required for a DMU to be considered efficient along a predefined direction vector and based on a user-defined efficiency threshold,
+- Producing efficiency rankings (either based on the predicted probabilities or on attainable improvements), and
+- Identifying peer units given a specific efficiency threshold.
+
+These tools facilitate benchmarking and policy simulations in a transparent and explainable framework.
+
+## Example Dataset: Spanish Food Industry Firms
+
+To illustrate the functionality of the `PEAXAI` package, we use a dataset of 917 companies in the food industry sector operating in Spain. The data were retrieved from the SABI (Sistema de Análisis de Balances Ibéricos) database for the year 2023 and include only firms with more than 50 employees.
+
+Each row corresponds to a single firm and includes both financial and operational variables relevant for productivity and efficiency analysis.
+
+The output variable used to measure performance is:
+
+- `operating_income`: Operating income in millions of euros.
+
+The input variables include:
+
+- `total_assets`: Total assets (in millions of euros).
+- `employees`: Number of employees.
+- `fixed_assets`: Tangible fixed assets (in millions of euros).
+- `personnel_expenses`: Personnel-related costs (in millions of euros).
+
+Additionally, the variable `autonomous_community` indicates the geographical location of each firm within one of Spain’s 17 autonomous communities. This allows the analysis to reflect regional institutional and market heterogeneity.
+
+The dataset exhibits a wide dispersion across firms, including both medium-sized and large enterprises. This heterogeneity poses a realistic challenge for evaluating efficiency and provides a rich testing ground for model explainability.
+
+
+## Load the package and example dataset
+For illustration purposes, this vignette focuses on a subset of the data: firms located in the Autonomous Community of Valencia (Comunidad Valenciana).
+
+```{r}
+library(PEAXAI)
+data("firms", package = "PEAXAI")
+```
+
+For illustration, we focus on firms located in the Comunidad Valenciana (Autonomous Community of Valencia).
+Filter the dataset to include only firms from the Comunidad Valenciana and remove the `autonomous_community` column.
+```{r}
+data <- subset(firms, autonomous_community == "Comunidad Valenciana")[, -ncol(firms)]
+rm(firms)
+```
+
+Quick structure and summary.
+```{r}
+str(data)
+summary(data)
+```
+
+## Specify parameters for PEAXAI model fitting
+Determine inputs (x) and outputs (y) indices.
+```{r}
+x <- c(1:4)
+y <- c(5)
+```
+
+Determine the technology assumptions.
+```{r}
+RTS <- "vrs"
+```
+
+To address class imbalance, we apply SMOTE based on the best-practice frontier (assuming a convex production technology). First, we identify the combinations of DMUs that define the frontier. Then, we generate one of two types of synthetic DMUs from these combinations: efficient units (on the frontier) and near-frontier inefficient units (inside the frontier’s envelope).
+
+When the efficient class is the minority, efficient-class SMOTE on the best-practice frontier helps the classifier learn the frontier more accurately. Optionally, if the observed imbalance still falls short of the target ratio, we also generate near-frontier inefficient synthetic units derived from the frontier geometry to sharpen the separation between efficient and inefficient regions.
+```{r}
+imbalance_rate <- seq(0.2, 0.4, 0.05) 
+```
+
+Define machine learning methods and their tuning parameters. Here we configure a neural network (nnet) with a grid of hyperparameters
+```{r}
+methods <- list(
+  "nnet" = list(
+    tuneGrid = expand.grid(
+      size = c(1, 5, 10, 20),
+      decay = 10^seq(-5, -1, by = 1)
+    ),
+    maxit = 100,
+    preProcess = c("center", "scale"),
+    # # --- arguments nnet ---
+    entropy = TRUE,
+    skip = TRUE,
+    maxit = 1000,
+    MaxNWts = 100000,
+    trace = FALSE,
+    weights = NULL
+  )
+)
+```
+
+Parameters for controlling model training (k-fold cross-validation)
+```{r}
+trControl <- list(
+  method = "cv",
+  number = 5
+)
+```
+
+Classification metrics to optimize during training (priority order in case of ties)
+```{r}
+metric_priority <- c("F1", "Balanced Accuracy", "ROC-AUC")
+```
+
+Define hold-out sample to evaluate model performance on unseen data. These samples are excluded from the cross-validation and hyperparameter tuning process. By default, is `NULL`.
+```{r}
+hold_out <- NULL
+```
+
+Set random seed for reproducibility (ensures consistent results across runs).
+```{r}
+seed <- 1
+set.seed(seed)
+```
+
+## Apply PEAXAI: from efficiency labeling to ML-based classification
+
+We now apply the full PEAXAI pipeline:
+
+1. Estimate efficiency labels using Additive DEA,
+2. Balance the data using SMOTE units,
+3. Train the machine learning classifier with cross-validation,
+4. Select the best model according to multiple performance metrics.
+ 
+```{r}
+models <- PEAXAI_fitting(
+  data = data,
+  x = x,
+  y = y,
+  RTS = RTS,
+  imbalance_rate = imbalance_rate,
+  methods = methods,
+  trControl = trControl,
+  metric_priority = metric_priority,
+  hold_out = hold_out,
+  verbose = TRUE
+)
+```
+
+## XAI method for global importance
+This example uses the SA (Sensitivity Analysis) method from the rminer package—specifically the 1D perturbation scheme with the AAD measure—to compute global relative importance with `PEAXAI_global_importance.` For alternative XAI methods and options, see the package documentation.
+```{r}
+importance_method <- list(
+  name = "SA",
+  method = "1D-SA",
+  measures = "AAD", 
+  levels = 7,
+  baseline = "mean"
+)
+```
+
+## Apply XAI method on the model fine-tuneed.
+If the method needs a reference distribution or to train a surrogate, use `background` to choose that dataset.
+`target` selects the dataset on which explanations are computed.
+
+If `target` = "train", relative importances are computed on the training distribution and thus reflect what the model actually learned during fitting.
+
+If `target` = "real", relative importances are computed on a dataset intended to approximate the real-world (deployment) distribution, yielding importances that better represent the underlying problem as observed in practice.
+
+```{r}
+relative_importance <- PEAXAI_global_importance(
+  data = data,
+  x = x,
+  y = y,
+  final_model = models[["best_model_fit"]][["nnet"]],
+  background = "train",
+  target = "train",
+  importance_method = importance_method
+)
+```
+
+## Selected efficiency thresholds
+We evaluate results at three efficiency cutoffs: 0.75, 0.85, and 0.95.
+```{r}
+efficiency_thresholds <- seq(0.75, 0.95, 0.1) 
+```
+
+## Directional vector for target setting
+We define a global, model-aware direction for improving inputs/outputs.
+
+`relative_importance` guides the direction using the model’s global importance.
+
+`scope` = "global" applies a single direction to all DMUs.
+
+`baseline` = "mean" centers perturbations around the training mean.
+
+```{r}
+directional_vector <- list(
+  relative_importance = relative_importance,
+  scope = "global",
+  baseline  = "mean"        
+)
+```
+
+## Compute targets at selected thresholds
+Given the thresholds and directional vector, we compute feasible improvement targets for each DMU.
+Key controls:
+
+`n_expand` = 0.5: expansion factor for the search neighborhood.
+
+`n_grid` = 50: grid resolution for exploring adjustments.
+
+`max_y` = 2, `min_x` = 1: bounds that cap output expansion and input contraction.
+
+```{r}
+targets <- PEAXAI_targets(
+  data = data,
+  x = x,
+  y = y,
+  final_model = models[["best_model_fit"]][["nnet"]],
+  efficiency_thresholds = efficiency_thresholds,
+  directional_vector = directional_vector,
+  n_expand = 0.5,
+  n_grid = 50,
+  max_y = 2,
+  min_x = 1
+)
+```
+
+## Efficiency rankings
+We compute efficiency rankings at each threshold using two bases:
+
+`Predicted`: ranks by the model’s predicted probability of being efficient (rank_basis = "predicted").
+
+`Attainable`: ranks by attainable improvements/targets implied by the model (rank_basis = "attainable").
+
+```{r}
+ranking <- PEAXAI_ranking(
+  data = data,
+  x = x,
+  y = y,
+  final_model = models[["best_model_fit"]][["nnet"]],
+  efficiency_thresholds = efficiency_thresholds,
+  targets = targets,
+  rank_basis = "predicted"
+)
+
+ranking2 <- PEAXAI_ranking(
+    data = data,
+    x = x,
+    y = y,
+    final_model = models[["best_model_fit"]][["nnet"]],
+    efficiency_thresholds = efficiency_thresholds,
+    targets = targets,
+    rank_basis = "attainable"
+  )
+```
+
+## Peers by efficiency thresholds
+For each threshold, we identify peer DMUs that serve as reference comparators.
+
+`weighted` = FALSE treats peers uniformly; set TRUE to weight importance given `relative_importance`.
+```{r}
+peers <- PEAXAI_peer(
+  data = data,
+  x = x,
+  y = y,
+  final_model = models[["best_model_fit"]][["nnet"]],
+  efficiency_thresholds = efficiency_thresholds,
+  weighted = FALSE,
+  relative_importance = relative_importance
+)
+```

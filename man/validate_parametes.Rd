@@ -2,7 +2,7 @@
 % Please edit documentation in R/preprocessing.R
 \name{validate_parametes}
 \alias{validate_parametes}
-\title{Handle Errors on PEAXAI}
+\title{Validate PEAXAI Input Parameters}
 \usage{
 validate_parametes(
   data,
@@ -18,15 +18,76 @@ validate_parametes(
 )
 }
 \arguments{
-\item{data}{A \code{data.frame} or \code{matrix} containing the variables in the model.}
+\item{data}{A \code{data.frame} or \code{matrix} containing the variables used in the model.}
 
-\item{x}{Column indexes of input variables in \code{data}.}
+\item{x}{Numeric vector of column indices in \code{data} corresponding to input variables.}
 
-\item{y}{Column indexes of output variables in \code{data}.}
+\item{y}{Numeric vector of column indices in \code{data} corresponding to output variables.}
+
+\item{RTS}{Returns-to-scale specification. Either a numeric code in
+\code{c(0,1,2,3,4,5)} or a character in
+\code{c("fdh","vrs","drs","crs","irs","add")}, matching the options in
+\code{Benchmarking::dea.add()}.}
+
+\item{trControl}{A list with resampling/control settings (e.g.,
+\code{list(method = "cv", number = 5)} or \code{list(method = "test_set", ...)}).
+The field \code{method} must be one of \code{"cv"} or \code{"test_set"}.}
+
+\item{methods}{Character vector with the learning algorithms to be tried (passed to caret);
+not validated here but kept for completeness.}
+
+\item{metric_priority}{Character string with the primary performance metric name (e.g., \code{"ROC"} or \code{"Accuracy"});
+not validated here but kept for completeness.}
+
+\item{hold_out}{Numeric proportion in (0,1) used when \code{trControl$method == "test_set"};
+not validated here but kept for completeness.}
+
+\item{imbalance_rate}{Optional numeric vector with class proportions or target imbalance
+rates. All values must be strictly between 0 and 1 if provided.}
+
+\item{verbose}{Logical; whether to print additional diagnostic messages (not used in this checker).}
 }
 \value{
-It returns a \code{matrix} in the required format and displays some error messages.
+Invisibly returns \code{NULL} on success (i.e., when all checks pass). Otherwise,
+throws an error describing the first problem encountered.
 }
 \description{
-This function check if PEAXAI arguments are well introduced and check if the analysis it will be done.
+Checks that the arguments supplied to PEAXAI fitting/projection routines are
+correctly specified. The function validates types, index ranges, and basic
+domain constraints (e.g., non-overlapping input/output indices, admissible
+returns-to-scale codes, probability ranges), and throws informative errors
+when violations are detected.
+}
+\details{
+The following checks are performed:
+\itemize{
+\item \strong{Data container}: \code{data} must be a non-empty \code{data.frame} or \code{matrix}.
+\item \strong{Index vectors}: \code{x} and \code{y} must be numeric indices within \code{ncol(data)} and must not overlap.
+\item \strong{RTS}: must be either one of the numeric codes \code{0:5} or one of
+\code{"fdh","vrs","drs","crs","irs","add"} (as in \code{Benchmarking::dea.add}).
+\item \strong{Resampling}: \code{trControl$method} must be \code{"cv"} or \code{"test_set"}.
+\item \strong{Imbalance}: if \code{imbalance_rate} is provided, all entries must
+lie in the open interval \code{(0,1)}.
+}
+Any violation triggers \code{stop()} with a descriptive message.
+}
+\examples{
+\dontrun{
+data(firms)
+validate_parametes(
+  data = firms,
+  x = 1:4, y = 5,
+  RTS = "vrs",
+  trControl = list(method = "cv", number = 5),
+  methods = c("nnet","svmPoly"),
+  metric_priority = "ROC",
+  hold_out = 0.2,
+  imbalance_rate = seq(0.1, 0.5, 0.1),
+  verbose = FALSE
+)
+}
+}
+\seealso{
+\code{\link[Benchmarking]{dea.add}} for RTS codes; \code{\link[caret]{trainControl}}
+for resampling specifications used during model training.
 }

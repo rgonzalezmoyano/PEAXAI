@@ -1,12 +1,68 @@
-#' @title Handle Errors on PEAXAI
+#' @title Validate PEAXAI Input Parameters
 #'
-#' @description This function check if PEAXAI arguments are well introduced and check if the analysis it will be done.
+#' @description
+#' Checks that the arguments supplied to PEAXAI fitting/projection routines are
+#' correctly specified. The function validates types, index ranges, and basic
+#' domain constraints (e.g., non-overlapping input/output indices, admissible
+#' returns-to-scale codes, probability ranges), and throws informative errors
+#' when violations are detected.
 #'
-#' @param data A \code{data.frame} or \code{matrix} containing the variables in the model.
-#' @param x Column indexes of input variables in \code{data}.
-#' @param y Column indexes of output variables in \code{data}.
+#' @param data A \code{data.frame} or \code{matrix} containing the variables used in the model.
+#' @param x Numeric vector of column indices in \code{data} corresponding to input variables.
+#' @param y Numeric vector of column indices in \code{data} corresponding to output variables.
+#' @param RTS Returns-to-scale specification. Either a numeric code in
+#'   \code{c(0,1,2,3,4,5)} or a character in
+#'   \code{c("fdh","vrs","drs","crs","irs","add")}, matching the options in
+#'   \code{Benchmarking::dea.add()}.
+#' @param trControl A list with resampling/control settings (e.g.,
+#'   \code{list(method = "cv", number = 5)} or \code{list(method = "test_set", ...)}).
+#'   The field \code{method} must be one of \code{"cv"} or \code{"test_set"}.
+#' @param methods Character vector with the learning algorithms to be tried (passed to caret);
+#'   not validated here but kept for completeness.
+#' @param metric_priority Character string with the primary performance metric name (e.g., \code{"ROC"} or \code{"Accuracy"});
+#'   not validated here but kept for completeness.
+#' @param hold_out Numeric proportion in (0,1) used when \code{trControl$method == "test_set"};
+#'   not validated here but kept for completeness.
+#' @param imbalance_rate Optional numeric vector with class proportions or target imbalance
+#'   rates. All values must be strictly between 0 and 1 if provided.
+#' @param verbose Logical; whether to print additional diagnostic messages (not used in this checker).
 #'
-#' @return It returns a \code{matrix} in the required format and displays some error messages.
+#' @details
+#' The following checks are performed:
+#' \itemize{
+#'   \item \strong{Data container}: \code{data} must be a non-empty \code{data.frame} or \code{matrix}.
+#'   \item \strong{Index vectors}: \code{x} and \code{y} must be numeric indices within \code{ncol(data)} and must not overlap.
+#'   \item \strong{RTS}: must be either one of the numeric codes \code{0:5} or one of
+#'         \code{"fdh","vrs","drs","crs","irs","add"} (as in \code{Benchmarking::dea.add}).
+#'   \item \strong{Resampling}: \code{trControl$method} must be \code{"cv"} or \code{"test_set"}.
+#'   \item \strong{Imbalance}: if \code{imbalance_rate} is provided, all entries must
+#'         lie in the open interval \code{(0,1)}.
+#' }
+#' Any violation triggers \code{stop()} with a descriptive message.
+#'
+#' @return
+#' Invisibly returns \code{NULL} on success (i.e., when all checks pass). Otherwise,
+#' throws an error describing the first problem encountered.
+#'
+#' @seealso
+#' \code{\link[Benchmarking]{dea.add}} for RTS codes; \code{\link[caret]{trainControl}}
+#' for resampling specifications used during model training.
+#'
+#' @examples
+#' \dontrun{
+#' data(firms)
+#' validate_parametes(
+#'   data = firms,
+#'   x = 1:4, y = 5,
+#'   RTS = "vrs",
+#'   trControl = list(method = "cv", number = 5),
+#'   methods = c("nnet","svmPoly"),
+#'   metric_priority = "ROC",
+#'   hold_out = 0.2,
+#'   imbalance_rate = seq(0.1, 0.5, 0.1),
+#'   verbose = FALSE
+#' )
+#' }
 
 # check if parameters are well introduced
 validate_parametes <- function(
@@ -16,7 +72,9 @@ validate_parametes <- function(
 
 ) {
 
-  # data
+  # ----------------------------------------------------------------------------
+  # data -----------------------------------------------------------------------
+  # ----------------------------------------------------------------------------
   if (is.null(data)) {
     stop("'data' must be a data.frame or matrix; got NULL.", call. = FALSE)
   }
@@ -29,7 +87,9 @@ validate_parametes <- function(
     stop("'data' has zero rows or zero columns.", call. = FALSE)
   }
 
-  # x and y
+  # ----------------------------------------------------------------------------
+  # x and y --------------------------------------------------------------------
+  # ----------------------------------------------------------------------------
   if (!(is.numeric(x) || is.numeric(y))) {
 
     stop("The arguments 'x' and 'y' must be vectors containing the indexes of the input and output variables, respectively.", call. = FALSE)
@@ -43,7 +103,9 @@ validate_parametes <- function(
 
   }
 
-  # RTS
+  # ----------------------------------------------------------------------------
+  # RTS ------------------------------------------------------------------------
+  # ----------------------------------------------------------------------------
   RTS_available_num <- c(0,1,2,3,4,5)
   RTS_available_char <- c("fdh", "vrs", "drs", "crs", "irs", "add")
 
@@ -57,8 +119,29 @@ validate_parametes <- function(
     }
   }
 
+  # ----------------------------------------------------------------------------
+  # trControl ------------------------------------------------------------------
+  # ----------------------------------------------------------------------------
+  browser()
+  if (is.null(trControl) || (is.list(trControl) && length(trControl) == 0L)) {
+    stop("'trControl' must be specified (e.g., list(method = 'cv', number = 5)).", call. = FALSE)
+  }
 
-  # imbalance_rate
+  method_available <- c("cv")
+
+  if (!is.character(trControl[["method"]]) || length(trControl[["method"]]) != 1L || !(trControl[["method"]] %in% method_available)) {
+    stop(
+      paste0(
+        "`trControl$method` must be one of  these methods: ", method_available),
+      call. = FALSE
+    )
+  }
+
+
+
+  # ----------------------------------------------------------------------------
+  # imbalance_rate -------------------------------------------------------------
+  # ----------------------------------------------------------------------------
   if (!is.null(imbalance_rate)) {
 
     if (!is.numeric(imbalance_rate)) {
@@ -74,52 +157,6 @@ validate_parametes <- function(
         call. = FALSE
       )
     }
-
-  }
-
-  # trControl
-  if (is.null(trControl) | (is.list(trControl) & length(trControl) == 0L)) {
-    stop("'trControl' must be specified (e.g., list(method = 'cv', number = 5)).", call. = FALSE)
-  }
-
-  method_available <- c("test_set", "cv")
-
-  if (!is.character(trControl[["method"]]) | length(trControl[["method"]]) != 1L | !(trControl[["method"]] %in% method_available)) {
-    stop(
-      sprintf("`trControl$method` must be one of: %s.",
-              paste(shQuote(method_available), collapse = ", ")),
-      call. = FALSE
-    )
-  }
-
-  # no cross-validation
-  if (trControl[["method"]] == "test_set") {
-
-    # no test set
-    if(is.null(trControl[["test_hold_out"]])) {
-      warning(
-        "'trControl$test_hold_out' is NULL: the dataset supplied in `data` will be used to evaluate model performance (no hold-out split).",
-        call. = FALSE
-      )
-    } else {
-
-      if(!is.numeric(trControl[["test_hold_out"]])) {
-        stop(
-          "'trControl$test_hold_out' must be a single numeric value strictly between 0 and 1.",
-          call. = FALSE
-        )
-      }
-
-      if(trControl[["test_hold_out"]] <= 0 & trControl[["test_hold_out"]] >= 1) {
-        stop(
-          "'trControl$test_hold_out' must be strictly between 0 and 1.",
-          call. = FALSE
-        )
-      }
-
-    }
-
-  } else if (trControl[["method"]] == "cv") {
 
   }
 

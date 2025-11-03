@@ -1,20 +1,75 @@
-#' @title Projections to the Hyperplane
+#' @title Projection-Based Efficiency Targets
 #'
-#' @description This function computes the efficiency scores based on a given model.
+#' @description
+#' Computes efficiency projections for each observation based on a trained
+#' classifier from \pkg{caret} that provides class probabilities via
+#' \code{predict(type = "prob")}. For each probability threshold, the function
+#' finds the direction and magnitude of change in input–output space required
+#' for a unit to reach a specified efficiency level, following a directional
+#' distance approach.
 #'
-#' @param data A \code{data.frame} or \code{matrix} containing the variables in the model.
-#' @param x Column indexes of input variables in \code{data}.
-#' @param y Column indexes of output variables in \code{data}.
-#' @param z Column indexes of environment variables in \code{data}.
-#' @param final_model The best-fitted model used for efficiency score computation.
-#' @param efficiency_thresholds Probability levels for determining efficient class scores.
-#' @param directional_vector A \code{data.frame} with importance variables results
-#' @param n_expand n_expand
-#' @param n_grid n_grid
-#' @param max_y fd max_y
-#' @param min_x fd min_x
+#' @param data A \code{data.frame} or \code{matrix} containing input and output variables.
+#' @param x A numeric vector indicating the column indexes of input variables in \code{data}.
+#' @param y A numeric vector indicating the column indexes of output variables in \code{data}.
+#' @param final_model A fitted \pkg{caret} model of class \code{"train"} that supports
+#'   \code{predict(type = "prob")} and returns a probability column for the efficient class.
+#' @param efficiency_thresholds A numeric vector of probability levels in (0,1)
+#'   that define the efficiency classes (e.g., \code{c(0.75, 0.9, 0.95)}).
+#' @param directional_vector A \code{list} with the required information to
+#'   construct the directional vector, including:
+#'   \itemize{
+#'     \item \code{relative_importance}: Numeric vector of variable importances that sum to 1.
+#'     \item \code{scope}: \code{"global"} (currently supported) or \code{"local"}.
+#'     \item \code{baseline}: \code{"mean"}, \code{"median"}, \code{"self"} or \code{"ones"}.
+#'   }
+#' @param n_expand Numeric. Number of expansion steps used to enlarge the initial
+#'   search range for \eqn{\beta}.
+#' @param n_grid Integer. Number of grid points evaluated during each iteration
+#'   to refine the cutoff value of \eqn{\beta}.
+#' @param max_y Numeric. Upper-limit multiplier for output expansion in the search
+#'   procedure (default = 2).
+#' @param min_x Numeric. Lower-limit multiplier for input contraction in the search
+#'   procedure (default = 1).
 #'
-#' @return A numeric vector containing the efficiency scores for each observation in the input data.
+#' @details
+#' For each observation and for each probability level in \code{efficiency_thresholds},
+#' the function searches for the smallest directional distance \eqn{\beta} such that
+#' the predicted probability of belonging to the efficient class reaches the target.
+#'
+#' @return
+#' A named \code{list} with one element per threshold. Each element contains:
+#' \itemize{
+#'   \item \code{data}: A \code{data.frame} of projected input–output values at that threshold.
+#'   \item \code{beta}: A two-column \code{data.frame} with the optimal \eqn{\beta}
+#'         and the corresponding predicted probability.
+#' }
+#'
+#' @seealso
+#' \code{\link{find_beta_maxmin}} for initializing search bounds;
+#' \code{\link[caret]{train}} for model training.
+#'
+#' @examples
+#' \dontrun{
+#' data(firms)
+#'
+#' # Assume 'final_model' is a caret-trained classifier returned by PEAXAI_fitting()
+#' dir_vec <- list(
+#'   relative_importance = c(0.25, 0.25, 0.25, 0.25),
+#'   scope = "global",
+#'   baseline = "mean"
+#' )
+#'
+#' targets <- PEAXAI_targets(
+#'   data = firms,
+#'   x = 1:4,
+#'   y = 5,
+#'   final_model = final_model,
+#'   efficiency_thresholds = seq(0.75, 0.95, 0.1),
+#'   directional_vector = dir_vec,
+#'   n_expand = 0.5,
+#'   n_grid = 100
+#' )
+#' }
 #'
 #' @export
 
@@ -84,7 +139,6 @@ PEAXAI_targets <- function (
   }
 
   data <- as.data.frame(data)
-  # save
 
   names_data <- names(data[,c(x,y)])
 
@@ -141,8 +195,6 @@ PEAXAI_targets <- function (
     vector_gy <- as.data.frame(score_imp_y * baseline_y)
     names(vector_gy) <- names_data[y]
 
-  } else if (directional_vector[["scope"]] == "local") {
-
   }
 
   # ----------------------------------------------------------------------------
@@ -193,13 +245,8 @@ PEAXAI_targets <- function (
     # loop for each observation
     for (i in 1:nrow(data)) {
 
-      # message(paste0("In progress: ", (round(i / nrow(data), 4) * 100), "%"))
-
-      if (inherits(final_model, "train")) {
-        prediction_0 <- predict(final_model, data[i,variables], type = "prob")[1]
-      } else if (inherits(final_model, "glm")) {
-        prediction_0 <- predict(final_model, data[i,variables], type = "response")[1]
-      }
+      # inicial_prediction
+      prediction_0 <- predict(final_model, data[i,variables], type = "prob")[1]
 
       # the DMU is more efficient then threshold?
       if (prediction_0 > thr) {
@@ -298,29 +345,13 @@ PEAXAI_targets <- function (
             row_df <- as.data.frame(t(row))
             colnames(row_df) <- names(data)
 
-            if (inherits(final_model, "train")) {
-              pred <- unlist(predict(final_model, row_df, type = "prob")[1])
-            } else if (inherits(final_model, "glm")) {
-              pred <- unlist(predict(final_model, row_df, type = "response")[1])
-            }
+            pred <- unlist(predict(final_model, row_df, type = "prob")[1])
 
             return(pred)
           })
 
           # # Ensures that each position is at least the maximum value observed up to that point
           eff_vector <- cummax(eff_vector)
-          # if (i == 20) browser()
-          #
-          # plot(eff_vector)
-          # prob_vector <- eff_vector
-          # print(find_beta_maxmin[i,])
-          # prob_vector <- as.data.frame(prob_vector)
-          # prob_vector$id <- 1:nrow(prob_vector)
-          # library(ggplot2)
-          # print(ggplot(data = prob_vector) +
-          #   geom_line(aes(x = id, y = prob_vector)) +
-          #   coord_cartesian(ylim = c(0, 1)) +
-          #   theme_minimal())
 
           # no changes case: min == max?
           if(round(eff_vector[1], precision_prob) == round(eff_vector[length(eff_vector)], precision_prob)) {
@@ -391,12 +422,6 @@ PEAXAI_targets <- function (
                 pred <- as.data.frame(data_scenario[i,variables])
                 names(pred) <- names(data)
 
-                # if (inherits(final_model, "train")) {
-                #   pred_max <- unlist(predict(final_model, pred, type = "prob")[1])
-                # } else if (inherits(final_model, "glm")) {
-                #   pred_max <- unlist(predict(final_model, pred, type = "response")[1])
-                # }
-
                 betas[i, 2] <- eff_vector[pos]
                 break
 
@@ -429,10 +454,10 @@ PEAXAI_targets <- function (
 
           if (iter_count == 20) {
 
-            data_scenario[i, x] <- matrix_eff[(length_betas/2), x]
-            data_scenario[i, y] <- matrix_eff[(length_betas/2), y]
+            data_scenario[i, x] <- matrix_eff[(n_grid/2), x]
+            data_scenario[i, y] <- matrix_eff[(n_grid/2), y]
 
-            betas[i, 1] <- range_beta[(length_betas/2)]
+            betas[i, 1] <- range_beta[(n_grid/2)]
             betas[i, 2] <- NA
 
             # print("end while by iter")
@@ -452,32 +477,74 @@ PEAXAI_targets <- function (
     result_thresholds[[as.character(thr)]][["beta"]] <- betas
   }
 
-  # data_scenario <- cbind(data_scenario, betas)
-
   return(result_thresholds)
 
 }
 
-#' @title Projections to the Hyperplane
+#' @title Search Range for Directional Efficiency Parameter (\eqn{\beta})
 #'
-#' @description This function computes the efficiency scores based on a given model.
+#' @description
+#' Estimates, for each observation, the minimum and maximum feasible values of the
+#' directional distance parameter \eqn{\beta} used in projection-based efficiency
+#' analysis. This function is an internal step of \code{\link{PEAXAI_targets}},
+#' providing the initial search bounds for the iterative determination of efficiency targets.
 #'
-#' @param data A \code{data.frame} or \code{matrix} containing the variables in the model.
-#' @param x Column indexes of input variables in \code{data}.
-#' @param y Column indexes of output variables in \code{data}.
-#' @param final_model The best-fitted model used for efficiency score computation.
-#' @param efficiency_thresholds Probability levels for determining efficient class scores.
-#' @param n_expand n_expand
-#' @param directional_vector A \code{data.frame} with importance variables results
-#' @param vector_gx dfd
-#' @param vector_gy dfdfd
-#' @param max_y fd max_y
-#' @param min_x fd min_x
+#' @param data A \code{data.frame} or \code{matrix} containing input and output variables.
+#' @param x A numeric vector with the column indexes of input variables in \code{data}.
+#' @param y A numeric vector with the column indexes of output variables in \code{data}.
+#' @param final_model A fitted \pkg{caret} model of class \code{"train"} that supports
+#'   \code{predict(type = "prob")} and returns a probability column for the efficient class.
+#' @param efficiency_thresholds A numeric vector of probability levels in (0,1).
+#'   Its minimum and maximum values delimit the target interval used to bracket \eqn{\beta}.
+#' @param n_expand Integer. Increment step size applied to \eqn{\beta} at each iteration.
+#' @param vector_gx A numeric vector or \code{data.frame} with directional changes for inputs
+#'   (typically negative direction), usually built inside \code{PEAXAI_targets}.
+#' @param vector_gy A numeric vector or \code{data.frame} with directional changes for outputs
+#'   (positive direction).
+#' @param max_y Numeric. Upper-limit multiplier for output expansion relative to observed maxima.
+#' @param min_x Numeric. Lower-limit multiplier for input contraction relative to observed minima.
 #'
-#' @return A numeric vector containing the efficiency scores for each observation in the input data.
+#' @details
+#' For each DMU, the function expands outputs and contracts inputs along the specified
+#' direction until the predicted probability of efficiency (from \code{final_model})
+#' reaches the maximum in \code{efficiency_thresholds} or feasible domain limits.
+#' The resulting interval \eqn{[\beta_{\min}, \beta_{\max}]} is then used by
+#' \code{\link{PEAXAI_targets}} to refine projections via grid search.
+#'
+#' @return
+#' A \code{data.frame} with two numeric columns:
+#' \describe{
+#'   \item{\code{min}}{Minimum feasible value of \eqn{\beta} for each observation.}
+#'   \item{\code{max}}{Maximum feasible value of \eqn{\beta} for each observation.}
+#' }
+#'
+#' @seealso
+#' \code{\link{PEAXAI_targets}} (efficiency projections based on \eqn{\beta});
+#' \code{\link[caret]{train}} (model training with class probabilities).
+#'
+#' @examples
+#' \dontrun{
+#' data(firms)
+#'
+#' # Suppose 'final_model' is a caret classifier with predict(type = "prob")
+#' gx <- c(-0.3, -0.2, -0.1, -0.1)
+#' gy <- c(0.25)
+#'
+#' find_beta_maxmin(
+#'   data = firms,
+#'   x = 1:4,
+#'   y = 5,
+#'   final_model = final_model,
+#'   efficiency_thresholds = c(0.5, 0.9),
+#'   n_expand = 0.1,
+#'   vector_gx = gx,
+#'   vector_gy = gy,
+#'   max_y = 2,
+#'   min_x = 1
+#' )
+#' }
 #'
 #' @export
-
 find_beta_maxmin <- function(
   data, x, y, final_model, efficiency_thresholds,
   n_expand, vector_gx, vector_gy, max_y, min_x
@@ -491,21 +558,13 @@ find_beta_maxmin <- function(
 
   variables <- c(x,y)
 
-  # if (nrow(vector_gx) > 1) {
-  #
-  # } else {
-    max_efficiency_threshold <- max(efficiency_thresholds)
-    min_efficiency_threshold <- min(efficiency_thresholds)
-  # }
+  max_efficiency_threshold <- max(efficiency_thresholds)
+  min_efficiency_threshold <- min(efficiency_thresholds)
 
   # for each DMU, it will be calculated the max beta possible
   for (i in 1:nrow(data)) {
 
-    if (inherits(final_model, "train")) {
-      prediction_0 <- predict(final_model, data[i,variables], type = "prob")[1]
-    } else if (inherits(final_model, "glm")) {
-      prediction_0 <- predict(final_model, data[i,variables], type = "response")[1]
-    }
+    prediction_0 <- predict(final_model, data[i,variables], type = "prob")[1]
 
     # the DMU is more efficient then threshold?
     if (prediction_0 > max_efficiency_threshold) {
@@ -549,11 +608,7 @@ find_beta_maxmin <- function(
         new_point <- cbind(new_x, new_y)
         names(new_point) <- names(data[,variables])
 
-        if (inherits(final_model, "train")) {
-          prediction_j <- predict(final_model, new_point, type = "prob")[1]
-        } else if (inherits(final_model, "glm")) {
-          prediction_j <- predict(final_model, new_point, type = "response")[1]
-        }
+        prediction_j <- predict(final_model, new_point, type = "prob")[1]
 
         # Check if the probability has decreased. The probability function should be monotonic.
         if (prediction_j < prediction_j_max) {

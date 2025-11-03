@@ -8,7 +8,7 @@
 #' @param trControl A \code{list} of selected machine learning learning.
 #' @param metric_priority dfdfd
 #'
-#' @importFrom caret train createFolds trainControl
+#' @importFrom caret train trainControl
 #' @importFrom pROC roc
 #' @importFrom PRROC pr.curve
 #'
@@ -90,14 +90,8 @@ train_PEAXAI <- function (
 
   }
 
-  if (trControl[["method"]] == "test_set") {
-    trControl <- trainControl(
-      method = "none",
-      classProbs = TRUE,
-      test_hold_out = trControl[["test_hold_out"]],
-      summaryFunction = PEAXAIsummaryFunction
-    )
-  } else {
+  # trControl actualize
+  if (trControl[["method"]] != "none") {
     trControl <- trainControl(
       method = trControl[["method"]],
       number = trControl[["number"]],
@@ -106,11 +100,12 @@ train_PEAXAI <- function (
     )
   }
 
+
   # ----------------------------------------------------------------------------
   # Neural Network -------------------------------------------------------------
   # ----------------------------------------------------------------------------
   if (method == "nnet") {
-    train_PEAXAI
+
     model_fit <- train(
       class_efficiency ~ .,
       data = data,
@@ -189,64 +184,3 @@ train_PEAXAI <- function (
   return(model_fit)
 
 }
-
-#' @title Training a Classification Machine Learning Model
-#'
-#' @description This function trains a set of models and selects best hyperparameters for each of them.
-#'
-#' @param data A \code{data.frame} or \code{matrix} containing the variables in the model.
-#' @param method Parameters for controlling the training process (from the \code{'caret'} package).
-#' @param arguments A \code{list} of selected machine learning models and their hyperparameters.
-#'
-#' @importFrom caret train createFolds
-
-#'
-#' @return It returns a \code{list} with the chosen model.
-#
-# train_glm <- function (
-#     data, method, arguments
-# ) {
-#
-#   # prediction type
-#   type <- "response"
-#   levels_order <- c("not_efficient", "efficient")
-#   data$class_efficiency <- factor(
-#     data$class_efficiency,
-#     levels = levels_order)
-#
-#   if (is.null(arguments[["weights"]])) {
-#
-#     weights <- NULL
-#
-#   } else if (arguments[["weights"]][1] == "dinamic") {
-#
-#     w0 <- nrow(data) / (2 * length(which(data$class_efficiency == "not_efficient")))
-#     w1 <- nrow(data) / (2 * length(which(data$class_efficiency == "efficient")))
-#
-#     weights <-  ifelse(data$class_efficiency == "efficient", w1, w0)
-#
-#   } else {
-#
-#     weights <- ifelse(
-#       data$class_efficiency == "efficient",
-#       arguments[["weights"]][["w1"]], arguments[["weights"]][["w0"]]
-#     )
-#
-#   }
-#
-#   # fit the glm model
-#   model_fit <- glm(
-#     class_efficiency ~.,
-#     data = data,
-#     family = arguments[["family"]],
-#     weights = weights
-#   )
-#
-#   model_fit <- step(
-#     model_fit,
-#     direction = arguments[["direction"]],
-#     trace = arguments[["trace"]])
-#
-#   return(model_fit)
-#
-# }

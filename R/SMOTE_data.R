@@ -18,6 +18,7 @@
 #' @param balance_data Indicate level of efficient units to achive and the number of efficient and not efficient units.
 
 #' @return It returns a \code{data.frame} with the newly created set of DMUs incorporated.
+#' @export
 
 SMOTE_data <- function (
     data, x, y, RTS = "vrs", balance_data

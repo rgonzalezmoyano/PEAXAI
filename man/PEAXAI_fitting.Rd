@@ -14,7 +14,7 @@ PEAXAI_fitting(
   methods,
   metric_priority = "Balanced Accuracy",
   hold_out = NULL,
-  verbose = FALSE
+  verbose = TRUE
 )
 }
 \arguments{
