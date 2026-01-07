@@ -21,26 +21,6 @@
 #'   \item{\code{target_data}}{A \code{data.frame} representing the target dataset, formatted in the same way.}
 #' }
 #'
-#' @importFrom caret train
-#'
-#' @examples
-#' \dontrun{
-#' model <- caret::train(y ~ ., data = my_data, method = "rf")
-#' result <- xai_prepare_sets(
-#'   data = my_data,
-#'   x = NULL, y = NULL,
-#'   final_model = model,
-#'   background = "train",
-#'   target = "real",
-#'   type = NULL,
-#'   threshold = NULL,
-#'   levels_order = c("not_efficient", "efficient")
-#' )
-#' str(result$train_data)
-#' str(result$target_data)
-#' }
-#'
-#' @export
 
 xai_prepare_sets <- function (
     data, x, y, final_model, background, target,

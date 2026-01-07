@@ -13,6 +13,9 @@
 #' @param y A numeric vector indicating the column indexes of output variables in \code{data}.
 #' @param final_model A fitted \pkg{caret} model of class \code{"train"} that supports
 #'   \code{predict(type = "prob")} and returns a probability column for the efficient class.
+#' @param calibration_model Optional probability-calibration model applied to the raw predicted probabilities from \code{final_model} (e.g., Platt scaling or isotonic regression).
+#' If provided, calibrated probabilities are used for ranking and threshold-based decisions.
+#' Set to \code{NULL} to use uncalibrated predictions.
 #' @param efficiency_thresholds A numeric vector of probability levels in (0,1)
 #'   that define the efficiency classes (e.g., \code{c(0.75, 0.9, 0.95)}).
 #' @param directional_vector A \code{list} with the required information to
@@ -49,101 +52,89 @@
 #' \code{\link[caret]{train}} for model training.
 #'
 #' @examples
-#' \dontrun{
-#' data(firms)
+#' \donttest{
+#'   data("firms", package = "PEAXAI")
 #'
-#' # Assume 'final_model' is a caret-trained classifier returned by PEAXAI_fitting()
-#' dir_vec <- list(
-#'   relative_importance = c(0.25, 0.25, 0.25, 0.25),
-#'   scope = "global",
-#'   baseline = "mean"
-#' )
+#'   data <- subset(
+#'     firms,
+#'     autonomous_community == "Comunidad Valenciana"
+#'   )
 #'
-#' targets <- PEAXAI_targets(
-#'   data = firms,
-#'   x = 1:4,
-#'   y = 5,
-#'   final_model = final_model,
-#'   efficiency_thresholds = seq(0.75, 0.95, 0.1),
-#'   directional_vector = dir_vec,
-#'   n_expand = 0.5,
-#'   n_grid = 100
-#' )
+#'   x <- 1:4
+#'   y <- 5
+#'   RTS <- "vrs"
+#'   imbalance_rate <- NULL
+#'
+#'   trControl <- list(
+#'     method = "cv",
+#'     number = 3
+#'   )
+#'
+#'   # glm method
+#'   methods <- list(
+#'     "glm" = list(
+#'       weights = "dinamic"
+#'      )
+#'    )
+#'
+#'   metric_priority <- c("Balanced_Accuracy", "ROC_AUC")
+#'
+#'   models <- PEAXAI_fitting(
+#'     data = data, x = x, y = y, RTS = RTS,
+#'     imbalance_rate = imbalance_rate,
+#'     methods = methods,
+#'     trControl = trControl,
+#'     metric_priority = metric_priority,
+#'     verbose = FALSE,
+#'     seed = 1
+#'   )
+#'
+#'   final_model <- models[["best_model_fit"]][["glm"]]
+#'
+#'   relative_importance <- PEAXAI_global_importance(
+#'     data = data, x = x, y = y,
+#'     final_model = final_model,
+#'     background = "real", target = "real",
+#'     importance_method = list(name = "PI", n.repetitions = 5)
+#'   )
+#'
+#'   efficiency_thresholds <- seq(0.75, 0.95, 0.1)
+#'
+#'   directional_vector <- list(relative_importance = relative_importance,
+#'   scope = "global", baseline  = "mean")
+#'
+#'   targets <- PEAXAI_targets(data = data, x = x, y = y, final_model = final_model,
+#'   efficiency_thresholds = efficiency_thresholds, directional_vector = directional_vector,
+#'   n_expand = 0.5, n_grid = 50, max_y = 2, min_x = 1)
 #' }
 #'
 #' @export
 
 PEAXAI_targets <- function (
-    data, x, y, final_model, efficiency_thresholds,
-    directional_vector, n_expand, n_grid, max_y = 2, min_x = 1
+    data, x, y, final_model, calibration_model = NULL,
+    efficiency_thresholds, directional_vector,
+    n_expand, n_grid, max_y = 2, min_x = 1
 ) {
 
-  # ----------------------------------------------------------------------------
-  # Input validation: warnings & errors ----------------------------------------
-  # ----------------------------------------------------------------------------
-  # data
-  if (is.matrix(data)) {
-    warning("`data` is a matrix; converting to data.frame.", call. = FALSE)
-    data <- as.data.frame(data, stringsAsFactors = FALSE)
-  } else if (!is.data.frame(data)) {
-    stop("Argument `data` must be a data.frame or a matrix.", call. = FALSE)
-  }
-
-  # variables
-  # Must be numeric
-  if (!(is.numeric(x) && is.numeric(y))) {
-    stop("Arguments `x` and `y` must be numeric indices corresponding to columns in `data`.", call. = FALSE)
-  }
-
-  # Must be within range
-  if (any(x < 1 | x > ncol(data)) || any(y < 1 | y > ncol(data))) {
-    stop("Indices `x` and/or `y` are out of range for the dataset.", call. = FALSE)
-  }
-
-  # Must not overlap
-  if (any(x %in% y)) {
-    stop("Indices in `x` and `y` must refer to different columns in `data`.", call. = FALSE)
-  }
-
-  # final_model
-  if (!(inherits(final_model, "train") ||
-        (inherits(final_model, "glm") && family(final_model)$family == "binomial"))) {
-    stop("`final_model` must be either a caret model (`train`) or a logistic regression (`glm` with family = 'binomial').",
-         call. = FALSE)
-  }
-
-  # efficiency_thresholds
-  if (!is.numeric(efficiency_thresholds) || !is.null(dim(efficiency_thresholds))) {
-    stop("`efficiency_thresholds` must be a numeric vector.", call. = FALSE)
-  }
-
-  if (length(efficiency_thresholds) == 0L) {
-    stop("`efficiency_thresholds` cannot be empty.", call. = FALSE)
-  }
-
-  if (any(!is.finite(efficiency_thresholds))) {
-    stop("`efficiency_thresholds` must contain only finite values (no NA/NaN/Inf).", call. = FALSE)
-  }
-
-  if (!all(efficiency_thresholds < 1)) {
-    stop("All values in `efficiency_thresholds` must be strictly less than 1.", call. = FALSE)
-  }
-
-  # directional_vector
-  if (!is.list(directional_vector)) {
-    stop("`directional_vector` must be a list.", call. = FALSE)
-  }
-
-  if(abs(sum(directional_vector[["relative_importance"]]) - 1) > 0.001) {
-    stop("Sum of importances must be 1. Change to relative importances.")
-  }
+  validate_parametes_PEAXAI_targets(
+    data, x, y, final_model,
+    efficiency_thresholds, directional_vector,
+    n_expand, n_grid, max_y, min_x
+  )
 
   data <- as.data.frame(data)
+
+  # reorder index 'x' and 'y' in data
+  data <- data[, c(x,y)]
+  x <- 1:(ncol(data) - length(y))
+  y <- (length(x) + 1):ncol(data)
 
   names_data <- names(data[,c(x,y)])
 
   # min and max values
   min_x_possible <- apply(as.matrix(data[,x]), 2, min)
+
+  max_y_possible <- apply(as.matrix(data[,y]), 2, max)
 
   # number of decimals to round
   precision_prob <- 5
@@ -181,9 +172,9 @@ PEAXAI_targets <- function (
 
     } else if (directional_vector[["baseline"]] == "ones") {
 
-      baseline_x <- as.data.frame(t(rep(1, ncol(data[,x]))))
+      baseline_x <- as.data.frame(t(rep(1, NCOL(data[,x]))))
       names(baseline_x) <- names_data[x]
-      baseline_y <- as.data.frame(t(rep(1, ncol(data[,y]))))
+      baseline_y <- as.data.frame(t(rep(1, NCOL(data[,y]))))
       names(baseline_y) <- names_data[y]
 
     }
@@ -206,6 +197,7 @@ PEAXAI_targets <- function (
     x = x,
     y = y,
     final_model = final_model,
+    calibration_model = calibration_model,
     efficiency_thresholds = efficiency_thresholds,
     n_expand = n_expand,
     vector_gx = vector_gx,
@@ -245,8 +237,14 @@ PEAXAI_targets <- function (
     # loop for each observation
     for (i in 1:nrow(data)) {
 
-      # inicial_prediction
-      prediction_0 <- predict(final_model, data[i,variables], type = "prob")[1]
+      # inicial prediction
+      prediction_0 <- PEAXAI_predict(
+        data = data[i,variables],
+        x = x,
+        y = y,
+        final_model = final_model,
+        calibration_model = calibration_model
+      )
 
       # the DMU is more efficient then threshold?
       if (prediction_0 > thr) {
@@ -330,8 +328,19 @@ PEAXAI_targets <- function (
           mx <- as.matrix(matrix_eff[, x, drop = FALSE])
           min_x_possible_vector <- as.numeric(min_x_possible*min_x)
 
+          my <- as.matrix(matrix_eff[, y, drop = FALSE])
+          max_y_possible_vector <- as.numeric(max_y_possible*max_y)
+
+
           # sums how many TRUE lines are violating the restriction
           viol <- rowSums(mx < rep(min_x_possible_vector, each = nrow(mx))) > 0
+          idx_viol_x <- which(viol)
+          viol <- rowSums(my > rep(max_y_possible_vector, each = nrow(my))) > 0
+          idx_viol_y <- which(viol)
+
+          viol <- rep(FALSE, nrow(mx))
+          viol[idx_viol_x] <- TRUE
+          viol[idx_viol_y] <- TRUE
 
           keep <- !viol
           if (any(!keep)) {
@@ -345,9 +354,17 @@ PEAXAI_targets <- function (
             row_df <- as.data.frame(t(row))
             colnames(row_df) <- names(data)
 
-            pred <- unlist(predict(final_model, row_df, type = "prob")[1])
+            # pred <- unlist(predict(final_model, row_df, type = "prob")[1])
+            pred <- PEAXAI_predict(
+              data = row_df,
+              x = x,
+              y = y,
+              final_model = final_model,
+              calibration_model = calibration_model
+            )
 
             return(pred)
+
           })
 
           # # Ensures that each position is at least the maximum value observed up to that point
@@ -471,10 +488,10 @@ PEAXAI_targets <- function (
 
     } # end for
 
-    names(betas) <- c("beta", "probability")
+    names(betas) <- c("betas", "probability")
 
-    result_thresholds[[as.character(thr)]][["data"]] <- data_scenario
-    result_thresholds[[as.character(thr)]][["beta"]] <- betas
+    result_thresholds[[as.character(thr)]][["counterfactual_dataset"]] <- data_scenario
+    result_thresholds[[as.character(thr)]][["inefficiencies"]] <- betas
   }
 
   return(result_thresholds)
@@ -494,6 +511,7 @@ PEAXAI_targets <- function (
 #' @param y A numeric vector with the column indexes of output variables in \code{data}.
 #' @param final_model A fitted \pkg{caret} model of class \code{"train"} that supports
 #'   \code{predict(type = "prob")} and returns a probability column for the efficient class.
+#' @param calibration_model A model to calibrate.
 #' @param efficiency_thresholds A numeric vector of probability levels in (0,1).
 #'   Its minimum and maximum values delimit the target interval used to bracket \eqn{\beta}.
 #' @param n_expand Integer. Increment step size applied to \eqn{\beta} at each iteration.
@@ -522,32 +540,13 @@ PEAXAI_targets <- function (
 #' \code{\link{PEAXAI_targets}} (efficiency projections based on \eqn{\beta});
 #' \code{\link[caret]{train}} (model training with class probabilities).
 #'
-#' @examples
-#' \dontrun{
-#' data(firms)
-#'
-#' # Suppose 'final_model' is a caret classifier with predict(type = "prob")
-#' gx <- c(-0.3, -0.2, -0.1, -0.1)
-#' gy <- c(0.25)
-#'
-#' find_beta_maxmin(
-#'   data = firms,
-#'   x = 1:4,
-#'   y = 5,
-#'   final_model = final_model,
-#'   efficiency_thresholds = c(0.5, 0.9),
-#'   n_expand = 0.1,
-#'   vector_gx = gx,
-#'   vector_gy = gy,
-#'   max_y = 2,
-#'   min_x = 1
-#' )
-#' }
-#'
 #' @export
+#'
+
 find_beta_maxmin <- function(
-  data, x, y, final_model, efficiency_thresholds,
-  n_expand, vector_gx, vector_gy, max_y, min_x
+  data, x, y, final_model, calibration_model,
+  efficiency_thresholds, n_expand, vector_gx,
+  vector_gy, max_y, min_x
 ) {
 
   betas <- as.data.frame(matrix(
@@ -564,7 +563,14 @@ find_beta_maxmin <- function(
   # for each DMU, it will be calculated the max beta possible
   for (i in 1:nrow(data)) {
 
-    prediction_0 <- predict(final_model, data[i,variables], type = "prob")[1]
+    # prediction_0 <- predict(final_model, data[i,variables], type = "prob")[1]
+    prediction_0 <- PEAXAI_predict(
+      data = data[i,variables],
+      x = x,
+      y = y,
+      final_model = final_model,
+      calibration_model = calibration_model
+    )
 
     # the DMU is more efficient then threshold?
     if (prediction_0 > max_efficiency_threshold) {
@@ -608,11 +614,20 @@ find_beta_maxmin <- function(
         new_point <- cbind(new_x, new_y)
         names(new_point) <- names(data[,variables])
 
-        prediction_j <- predict(final_model, new_point, type = "prob")[1]
+        # prediction_j <- predict(final_model, new_point, type = "prob")[1]
+        prediction_j <- PEAXAI_predict(
+          data = new_point,
+          x = x,
+          y = y,
+          final_model = final_model,
+          calibration_model = calibration_model
+        )
 
         # Check if the probability has decreased. The probability function should be monotonic.
         if (prediction_j < prediction_j_max) {
           prediction_j <- prediction_j_max
+        } else {
+          prediction_j_max <- prediction_j
         }
 
         if (control_threshold_min == FALSE & prediction_j > min_efficiency_threshold) {

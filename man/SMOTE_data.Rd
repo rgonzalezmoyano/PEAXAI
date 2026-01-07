@@ -4,7 +4,7 @@
 \alias{SMOTE_data}
 \title{Create New SMOTE Units to Balance Data combinations of m + s}
 \usage{
-SMOTE_data(data, x, y, RTS = "vrs", balance_data)
+SMOTE_data(data, x, y, RTS = "vrs", balance_data, seed)
 }
 \arguments{
 \item{data}{A \code{data.frame} containing the variables used in the model.}
@@ -25,6 +25,8 @@ returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 }}
 
 \item{balance_data}{Indicate level of efficient units to achive and the number of efficient and not efficient units.}
+
+\item{seed}{Integer. Seed for reproducibility.}
 }
 \value{
 It returns a \code{data.frame} with the newly created set of DMUs incorporated.

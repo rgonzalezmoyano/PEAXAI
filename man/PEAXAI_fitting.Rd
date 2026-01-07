@@ -8,12 +8,19 @@ PEAXAI_fitting(
   data,
   x,
   y,
+  z_numeric = NULL,
+  z_factor = NULL,
   RTS = "vrs",
+  B = NULL,
+  alpha = FALSE,
+  m = NULL,
   imbalance_rate = NULL,
   trControl,
   methods,
-  metric_priority = "Balanced Accuracy",
+  metric_priority = "Balanced_Accuracy",
+  calibration_method = NULL,
   hold_out = NULL,
+  seed = NULL,
   verbose = TRUE
 )
 }
@@ -23,6 +30,10 @@ PEAXAI_fitting(
 \item{x}{Integer vector with column indices of input variables in \code{data}.}
 
 \item{y}{Integer vector with column indices of output variables in \code{data}.}
+
+\item{z_numeric}{Integer vector with column indices of numeric environment variables in \code{data}. By default is \code{NULL}.}
+
+\item{z_factor}{Integer vector with column indices of factor environment variables in \code{data}. By default is \code{NULL}.}
 
 \item{RTS}{Text string or number defining the underlying DEA technology /
 returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
@@ -35,6 +46,10 @@ returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 \item{\code{5} / \code{"add"}}{Additivity (scaling up and down, but only with integers), and free disposability.}
 }}
 
+\item{B}{number of bootstrap replicates in Conditional DEA.}
+
+\item{m}{number of units to be included in the reference set.}
+
 \item{imbalance_rate}{Optional target(s) for class balance via SMOTE. If \code{NULL},
 no synthetic balancing is performed.}
 
@@ -44,10 +59,27 @@ and \code{"none"}. See \pkg{caret} documentation.}
 
 \item{methods}{A \code{list} of selected machine learning models and their hyperparameters.}
 
-\item{metric_priority}{A \code{string} specifying the summary metric for classification to select the optimal model. Default includes \code{"Balanced_accuracy"} due to (normally) unbalanced data.}
+\item{metric_priority}{A \code{string} specifying the summary metric for classification to select the optimal model. Default includes \code{"Balanced_Accuracy"} due to (normally) unbalanced data.}
+
+\item{calibration_method}{Character string specifying the probability calibration
+method applied to the fitted classifier. Supported options are:
+\describe{
+\item{\code{"none"}}{No probability calibration is applied; raw classifier
+probabilities are returned.}
+\item{\code{"platt"}}{Platt scaling, which fits a logistic regression model
+mapping raw scores to calibrated probabilities. Suitable for relatively
+small samples and parametric probability adjustment.}
+\item{\code{"isotonic"}}{Isotonic regression, a non-parametric monotonic
+calibration method that adapts flexibly to the empirical score-probability
+relationship. Recommended for larger samples where sufficient calibration
+data are available.}
+}
+Calibration is performed using validation data whenever resampling is enabled.}
 
 \item{hold_out}{Numeric proportion in (0,1) for validation split (default \code{NULL}).
 If \code{NULL}, training and validation use the same data.}
+
+\item{seed}{Integer. Seed for reproducibility.}
 
 \item{verbose}{Logical; if \code{TRUE}, prints progress messages (default \code{FALSE}).}
 }
@@ -62,4 +94,41 @@ validation or a train/validation/test split, selecting the configuration that
 maximizes the specified metric(s). Returns, for each technique, the best fitted
 model together with training summaries, performance metrics, and the selected
 balancing level.
+}
+\examples{
+\donttest{
+  data("firms", package = "PEAXAI")
+
+  data <- subset(
+    firms,
+    autonomous_community == "Comunidad Valenciana"
+  )
+
+  trControl <- list(
+    method = "cv",
+    number = 3
+  )
+
+  # glm method
+  methods <- list(
+    "glm" = list(
+        weights = "dinamic"
+     )
+  )
+
+  models <- PEAXAI_fitting(
+    data = data,
+    x = c(1:4),
+    y = 5,
+    RTS = "vrs",
+    imbalance_rate = NULL,
+    methods = methods,
+    trControl = trControl,
+    metric_priority = c("Balanced_Accuracy", "Precision"),
+    calibration_method = "platt",
+    seed = 1,
+    verbose = FALSE
+  )
+}
+
 }

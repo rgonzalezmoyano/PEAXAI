@@ -46,13 +46,53 @@
 #'   with names matching the predictor columns; the values sum to 1.
 #'
 #' @examples
-#' \dontrun{
-#' imp <- PEAXAI_global_importance(
-#'   data = df, x = x_idx, y = y_idx, final_model = fit,
-#'   background = "real", target = "real",
-#'   importance_method = list(name = "PI", n.repetitions = 10)
-#' )
-#' print(imp)
+#' \donttest{
+#'   data("firms", package = "PEAXAI")
+#'
+#'   data <- subset(
+#'     firms,
+#'     autonomous_community == "Comunidad Valenciana"
+#'   )
+#'
+#'   x <- 1:4
+#'   y <- 5
+#'   RTS <- "vrs"
+#'   imbalance_rate <- NULL
+#'
+#'   trControl <- list(
+#'     method = "cv",
+#'     number = 3
+#'   )
+#'
+#'   # glm method
+#'   methods <- list(
+#'     "glm" = list(
+#'       weights = "dinamic"
+#'      )
+#'    )
+#'
+#'   metric_priority <- c("Balanced_Accuracy", "ROC_AUC")
+#'
+#'   models <- PEAXAI_fitting(
+#'     data = data, x = x, y = y, RTS = RTS,
+#'     imbalance_rate = imbalance_rate,
+#'     methods = methods,
+#'     trControl = trControl,
+#'     metric_priority = metric_priority,
+#'     seed = 1,
+#'     verbose = FALSE
+#'   )
+#'
+#'   final_model <- models[["best_model_fit"]][["glm"]]
+#'
+#'   imp <- PEAXAI_global_importance(
+#'     data = data, x = x, y = y,
+#'     final_model = final_model,
+#'     background = "real", target = "real",
+#'     importance_method = list(name = "PI", n.repetitions = 5)
+#'   )
+#'
+#'   head(imp)
 #' }
 #'
 #' @seealso \code{\link[fastshap]{explain}}, \code{\link[iml]{FeatureImp}},
@@ -70,6 +110,11 @@ PEAXAI_global_importance <- function(
     data, x, y, final_model, background = "train",
     target = "train", importance_method
     ) {
+
+  validate_parametes_PEAXAI_global_importance(
+    data, x, y, final_model,
+    background, target, importance_method
+  )
 
   # reorder index 'x' and 'y' in data
   data <- data[, c(x,y)]

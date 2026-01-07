@@ -6,7 +6,9 @@
 #' @param method Parameters for controlling the training process (from the \code{'caret'} package).
 #' @param parameters A \code{list} of selected machine learning models and their hyperparameters.
 #' @param trControl A \code{list} of selected machine learning learning.
-#' @param metric_priority dfdfd
+#' @param metric_priority A \code{string} specifying the summary metric for classification to select the optimal model. Default includes \code{"Balanced_Accuracy"} due to (normally) unbalanced data.
+#' @param seed  Integer. Seed for reproducibility.
+
 #'
 #' @importFrom caret train trainControl
 #' @importFrom pROC roc
@@ -15,7 +17,7 @@
 #' @return It returns a \code{list} with the chosen model.
 
 train_PEAXAI <- function (
-    data, method, parameters, trControl, metric_priority
+    data, method, parameters, trControl, metric_priority, seed
     ) {
 
   # general function to get performance
@@ -24,8 +26,9 @@ train_PEAXAI <- function (
     if(any(is.na(data$pred))) {
 
       out_names <- c("Accuracy", "Kappa",
-                     "Recall", "Specificity", "Precision", "F1", "Balanced Accuracy",
-                     "ROC-AUC", "PR-AUC")
+                     "Recall", "Specificity", "Precision", "F1", "Balanced_Accuracy", "G_mean",
+                     "ROC-AUC", "PR-AUC",
+                     "Cross_Entropy", "Cross_Entropy_Efficient")
 
       performance <- setNames(rep(NA, length(out_names)), out_names)
 
@@ -39,6 +42,7 @@ train_PEAXAI <- function (
     # predictions
     y_hat <- data$pred
     y_hat <- factor(y_hat, levels = levls)
+    if(levels(y_hat) != c("efficient", "not_efficient")) browser()
     y_hat_prob <- data$efficient
 
     # reference
@@ -62,6 +66,9 @@ train_PEAXAI <- function (
       cm$byClass[["Precision"]] <- 0
     }
 
+    # G-mean
+    gmean <- sqrt(cm$byClass["Recall"]*cm$byClass["Specificity"])
+
     # ROC-AUC
     roc_obj <- roc(
       response = y_obs,
@@ -77,13 +84,40 @@ train_PEAXAI <- function (
       curve = TRUE
     )
 
+    # cross_entropy
+    y_bin <- ifelse(y_obs == "efficient", 1, 0)
+    p <- y_hat_prob
+
+    # no log(0)
+    eps <- 1e-15
+    p_clipped <- pmin(pmax(p, eps), 1 - eps)
+
+    cross_entropy <- -mean(
+      y_bin * log(p_clipped) + (1 - y_bin) * log(1 - p_clipped)
+    )
+
+    # cross entropy efficient class
+    p <- y_hat_prob[y_bin == 1]
+    y_bin <- y_bin[y_bin == 1]
+
+    # no log(0)
+    eps <- 1e-15
+    p_clipped <- pmin(pmax(p, eps), 1 - eps)
+
+    cross_entropy_efficient <- -mean(
+      y_bin * log(p_clipped) + (1 - y_bin) * log(1 - p_clipped)
+    )
+
     performance <- c(
       cm$overall[c("Accuracy", "Kappa")],
       cm$byClass[c("Recall", "Specificity",
-                   "Precision", "F1",
-                   "Balanced Accuracy")],
-      "ROC-AUC" = roc_obj$auc,
-      "PR-AUC" = unname(pr_obj$auc.integral)
+                   "Precision", "F1")],
+      "Balanced_Accuracy" = cm$byClass[["Balanced Accuracy"]],
+      "G_mean" = unname(gmean),
+      "ROC_AUC" = roc_obj$auc,
+      "PR_AUC" = unname(pr_obj$auc.integral),
+      "Cross_Entropy" = cross_entropy,
+      "Cross_Entropy_Efficient" = cross_entropy_efficient
     )
 
     return(performance)
@@ -91,19 +125,31 @@ train_PEAXAI <- function (
   }
 
   # trControl actualize
-  if (trControl[["method"]] != "none") {
-    trControl <- trainControl(
-      method = trControl[["method"]],
-      number = trControl[["number"]],
-      summaryFunction = PEAXAIsummaryFunction,
-      classProbs = TRUE
-    )
-  }
-
+  # if (trControl[["method"]] == "cv") {
+  #   trControl <- trainControl(
+  #     method = trControl[["method"]],
+  #     number = trControl[["number"]],
+  #     summaryFunction = PEAXAIsummaryFunction,
+  #     classProbs = TRUE,
+  #     savePredictions = "all"
+  #   )
+  # } else if (trControl[["method"]] == "repeatedcv") {
+  #   trControl <- trainControl(
+  #     method = trControl[["method"]],
+  #     number = trControl[["number"]],
+  #     repeats = trControl[["repeats"]],
+  #     summaryFunction = PEAXAIsummaryFunction,
+  #     classProbs = TRUE,
+  #     savePredictions = "all"
+  #   )
+  # }
+  trControl <- trainControl(method = "none", classProbs = TRUE)
 
   # ----------------------------------------------------------------------------
   # Neural Network -------------------------------------------------------------
   # ----------------------------------------------------------------------------
+
+  set.seed(seed)
   if (method == "nnet") {
 
     model_fit <- train(
@@ -124,17 +170,17 @@ train_PEAXAI <- function (
 
   } else if (method == "rf") {
 
-    # model_fit <- train(
-    #   class_efficiency ~ .,
-    #   data = data,
-    #   method = "rf",
-    #   tuneGrid = hyparameter,
-    #   trControl = trainControl(method = "none", classProbs = TRUE),
-    #   metric = metric,
-    #
-    #   # rf (no fine-tuning)
-    #   ntree = arguments[["ntree"]]
-    # )
+    model_fit <- train(
+      class_efficiency ~ .,
+      data = data,
+      method = "rf",
+      tuneGrid = parameters[["tuneGrid"]],
+      trControl = trControl,
+      metric = "Accuracy",
+
+      # rf (no fine-tuning)
+      ntree = parameters[["ntree"]]
+    )
 
   } else if (method == "svmPoly") {
 
@@ -149,18 +195,36 @@ train_PEAXAI <- function (
       prob.model = TRUE
     )
 
+  } else if (method == "svmRadial") {
+
+    model_fit <- train(
+      class_efficiency ~ .,
+      data = data,
+      method = "svmRadial",
+      preProcess = parameters[["preProcess"]],
+      tuneGrid = parameters[["tuneGrid"]],
+      trControl = trControl,
+      metric = "Accuracy",
+      prob.model = TRUE
+    )
+
   } else if (method == "glm") {
 
+    if (is.null(parameters[["weights"]])) {
 
-    if (parameters[["weights"]][1] == "dinamic") {
-      w0 <- nrow(data) / (2 * length(which(data$class_efficiency == "not_efficient")))
-      w1 <- nrow(data) / (2 * length(which(data$class_efficiency == "efficient")))
-    } else if (is.data.frame(parameters[["weights"]])) {
-      w0 <- parameters[["weights"]][["w0"]]
-      w1 <- parameters[["weights"]][["w1"]]
-    } else {
       w0 <- 1
       w1 <- 1
+
+    } else {
+
+      if (parameters[["weights"]][1] == "dinamic") {
+        w0 <- nrow(data) / (2 * length(which(data$class_efficiency == "not_efficient")))
+        w1 <- nrow(data) / (2 * length(which(data$class_efficiency == "efficient")))
+      } else if (is.data.frame(parameters[["weights"]])) {
+        w0 <- parameters[["weights"]][["w0"]]
+        w1 <- parameters[["weights"]][["w1"]]
+      }
+
     }
 
     model_fit <- train(
@@ -170,7 +234,7 @@ train_PEAXAI <- function (
       family = binomial(),
       trControl = trControl,
       weights  = ifelse(data$class_efficiency == "efficient", w1, w0),
-      metric = metric_priority[1]
+      metric = "Accuracy"
     )
 
     if (trControl[["method"]] != "none") {

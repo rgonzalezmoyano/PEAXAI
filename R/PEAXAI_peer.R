@@ -9,7 +9,13 @@
 #' @param x Integer vector indicating the column indices of input variables in \code{data}.
 #' @param y Integer vector indicating the column indices of output variables in \code{data}.
 #' @param final_model A fitted classification model used to estimate efficiency probabilities. Supported classes: \code{"train"} (from \pkg{caret}) or \code{"glm"} (binomial).
+#' @param calibration_model Optional probability-calibration model applied to the raw
+#' predicted probabilities from \code{final_model} (e.g., Platt scaling or isotonic regression).
+#' If provided, calibrated probabilities are used for ranking and threshold-based decisions.
+#' Set to \code{NULL} to use uncalibrated predictions.
 #' @param efficiency_thresholds Numeric vector indicating the minimum probability values required to consider a DMU as efficient.
+#' @param targets A named list containing, for each efficiency threshold, the corresponding
+
 #' @param weighted Logical. If \code{TRUE}, peers are selected using weighted Euclidean distances based on variable importance. If \code{FALSE} (default), unweighted distances are used.
 #' @param relative_importance Optional named numeric vector indicating the relative importance of each input/output variable (used when \code{weighted = TRUE}).
 #'
@@ -24,25 +30,83 @@
 #' @importFrom utils head
 #'
 #' @examples
-#' \dontrun{
-#' # Example using caret model:
-#' model <- caret::train(x = ..., y = ..., method = "rf", ...)
-#' peers <- PEAXAI_peer(data = mydata, x = 1:4, y = 5, final_model = model,
-#'                      efficiency_thresholds = c(0.8, 0.9), weighted = FALSE)
+#' \donttest{
+#'   data("firms", package = "PEAXAI")
+#'
+#'   data <- subset(
+#'     firms,
+#'     autonomous_community == "Comunidad Valenciana"
+#'   )
+#'
+#'   x <- 1:4
+#'   y <- 5
+#'   RTS <- "vrs"
+#'   imbalance_rate <- NULL
+#'
+#'   trControl <- list(
+#'     method = "cv",
+#'     number = 3
+#'   )
+#'
+#'   # glm method
+#'   methods <- list(
+#'     "glm" = list(
+#'       weights = "dinamic"
+#'      )
+#'    )
+#'
+#'   metric_priority <- c("Balanced_Accuracy", "ROC_AUC")
+#'
+#'   models <- PEAXAI_fitting(
+#'     data = data, x = x, y = y, RTS = RTS,
+#'     imbalance_rate = imbalance_rate,
+#'     methods = methods,
+#'     trControl = trControl,
+#'     metric_priority = metric_priority,
+#'     verbose = FALSE,
+#'     seed = 1
+#'   )
+#'
+#'   final_model <- models[["best_model_fit"]][["glm"]]
+#'
+#'   relative_importance <- PEAXAI_global_importance(
+#'     data = data, x = x, y = y,
+#'     final_model = final_model,
+#'     background = "real", target = "real",
+#'     importance_method = list(name = "PI", n.repetitions = 5)
+#'   )
+#'
+#'   efficiency_thresholds <- seq(0.75, 0.95, 0.1)
+#'
+#'   directional_vector <- list(relative_importance = relative_importance,
+#'   scope = "global", baseline  = "mean")
+#'
+#'   targets <- PEAXAI_targets(data = data, x = x, y = y, final_model = final_model,
+#'   efficiency_thresholds = efficiency_thresholds, directional_vector = directional_vector,
+#'   n_expand = 0.5, n_grid = 50, max_y = 2, min_x = 1)
+#'
+#'   peers <- PEAXAI_peer(data = data, x = x, y = y, final_model = final_model,
+#'   efficiency_thresholds = efficiency_thresholds, targets = targets, weighted = FALSE)
 #' }
 #'
 #' @export
+#'
 
 PEAXAI_peer <- function(
-    data, x, y, final_model, efficiency_thresholds,
-    weighted = FALSE, relative_importance = NULL
+    data, x, y, final_model, calibration_model = NULL,
+    efficiency_thresholds, targets, weighted = FALSE,
+    relative_importance = NULL
     ) {
+
+  validate_parametes_PEAXAI_peer <- validate_parametes_PEAXAI_peer(
+    data, x, y, final_model, efficiency_thresholds,
+    weighted, relative_importance
+  )
 
   # reorder index 'x' and 'y' in data
   data <- data[, c(x,y)]
   x <- 1:(ncol(data) - length(y))
   y <- (length(x) + 1):ncol(data)
-
 
   variables <- c(x,y)
 
@@ -53,14 +117,18 @@ PEAXAI_peer <- function(
 
   if (inherits(final_model, "train")) {
     # caret::train
-    prob_vector <- predict(final_model, newdata = data, type = "prob")["efficient"]
-  } else if (inherits(final_model, "glm")) {
-    # glm binomial
-    prob_vector <- as.numeric(predict(final_model, newdata = data, type = "response"))
+    # prob_vector <- predict(final_model, newdata = data, type = "prob")["efficient"]
+    prob_vector <- PEAXAI_predict(
+      data = data,
+      x = x,
+      y = y,
+      final_model = final_model,
+      calibration_model = calibration_model
+    )
+
   } else {
     stop("Unsupported model type.")
   }
-
 
   # ----------------------------------------------------------------------------
   # get peers ------------------------------------------------------------------
@@ -75,21 +143,21 @@ PEAXAI_peer <- function(
   for (thr in efficiency_thresholds) {
     message(paste0("Efficiency threshold: ", thr))
 
-
     # check if there are some DMUs which have the threshold desired
     if (max(prob_vector) < thr) {
 
-      peer_list[[thr]] <- NA
-      peer_weight_list[[thr]] <- NA
+      peer_list[[as.character(thr)]] <-NA
+      peer_weight_list[[as.character(thr)]] <- NA
       next
     }
 
     # first, determinate efficient units
     if (inherits(final_model, "train")) {
-      idx_eff <- which(prob_vector$efficient > thr)
-    } else if (inherits(final_model, "glm")) {
       idx_eff <- which(prob_vector > thr)
     }
+    # else if (inherits(final_model, "glm")) {
+    #   idx_eff <- which(prob_vector > thr)
+    # }
 
     if (weighted == FALSE) {
 
@@ -109,8 +177,9 @@ PEAXAI_peer <- function(
 
         # set reference
         reference <- data[unit_eff, variables]
+        # reference <- targets[[as.character(thr)]][["counterfactual_dataset"]][unit_eff, variables]
 
-        distance <- unname(apply(data[, variables], 1, function(x) {
+        distance <- unname(apply(targets[[as.character(thr)]][["counterfactual_dataset"]][, variables], 1, function(x) {
           sqrt(sum((x - reference)^2))
         }
         ))
@@ -121,7 +190,7 @@ PEAXAI_peer <- function(
         save_dist[,idx_dis] <- as.matrix(distance)
       }
 
-      #
+      # near DMU efficient for projection
       near_idx_eff <- apply(save_dist, 1, function(row) {
 
         which.min(abs(row))
@@ -152,29 +221,34 @@ PEAXAI_peer <- function(
         nrow = nrow(data)
       )
 
-      # calculate weighted distances
-      result_importance_matrix <- as.data.frame(matrix(
-        data = rep(unlist(relative_importance[variables]), each = nrow(data)),
-        nrow = nrow(data),
-        ncol = ncol(data[,variables]),
-        byrow = FALSE
-      ))
-      names(result_importance_matrix) <- names(data)[variables]
+      # # calculate weighted distances
+      # result_importance_matrix <- as.data.frame(matrix(
+      #   data = rep(unlist(relative_importance[variables]), each = nrow(data)),
+      #   nrow = nrow(data),
+      #   ncol = ncol(data[,variables]),
+      #   byrow = FALSE
+      # ))
+      # names(result_importance_matrix) <- names(data)[variables]
 
-      w_eval_data <- data[, variables] * relative_importance
+      w <- as.numeric(relative_importance[1, variables])
+      names(w) <- variables
+
+      w_eval_data <- sweep(data[, variables, drop = FALSE], 2, w, `*`)
 
       for (unit_eff in idx_eff) {
 
         # set reference
-        reference <- data[unit_eff, variables]
+        # reference <- data[unit_eff, variables]
+        reference <- sweep(targets[[as.character(thr)]][["counterfactual_dataset"]][unit_eff, variables, drop = FALSE], 2, w, `*`)
 
-        distance <- unname(apply(data[, variables], 1, function(row) {
-          sqrt((sum(relative_importance[variables] * ((row - reference)^2))))
+        distance <- unname(apply(w_eval_data[, variables], 1, function(row) {
+          sqrt(sum(((row - reference)^2)))
         }))
 
         # get position in save results
         idx_dis <- which(idx_eff == unit_eff)
         save_dist_weight[,idx_dis] <- as.matrix(distance)
+
       }
 
       near_idx_eff_weight <- apply(save_dist_weight, 1, function(row) {
@@ -199,9 +273,13 @@ PEAXAI_peer <- function(
   } # end loop thresholds
 
   if (weighted == FALSE) {
-    return(peer_list)
+    peer <- as.data.frame(peer_list, check.names = FALSE)
+    peer <- cbind(DMU = seq_len(nrow(peer)), peer)
+    return(peer)
   } else {
-    return(peer_weight_list)
+    peer_weight <- as.data.frame(peer_weight_list, check.names = FALSE)
+    peer_weight <- cbind(DMU = seq_len(nrow(peer_weight)), peer_weight)
+    return(peer_weight)
   }
 
 }

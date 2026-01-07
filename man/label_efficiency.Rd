@@ -4,7 +4,19 @@
 \alias{label_efficiency}
 \title{Data preprocessing and efficiency labeling with Additive DEA}
 \usage{
-label_efficiency(data, REF = data, x, y, RTS = "vrs")
+label_efficiency(
+  data,
+  REF = data,
+  x,
+  y,
+  z_numeric = NULL,
+  z_factor = NULL,
+  RTS = "vrs",
+  B = NULL,
+  alpha = FALSE,
+  m = NULL,
+  seed
+)
 }
 \arguments{
 \item{data}{A \code{data.frame} or \code{matrix} containing all variables.}
@@ -17,6 +29,10 @@ the same number of rows as \code{data}.}
 
 \item{y}{Integer vector with column indices of output variables in \code{data}.}
 
+\item{z_numeric}{Integer vector with column indices of numeric environment variables in \code{data}. By default is \code{NULL}.}
+
+\item{z_factor}{Integer vector with column indices of factor environment variables in \code{data}. By default is \code{NULL}.}
+
 \item{RTS}{Character or integer specifying the DEA technology / returns-to-scale
 assumption (default: \code{"vrs"}). Accepted values:
 \describe{
@@ -27,6 +43,12 @@ assumption (default: \code{"vrs"}). Accepted values:
 \item{\code{4} / \code{"irs"}}{Increasing returns to scale (up-scaling only, convexity + free disposability).}
 \item{\code{5} / \code{"add"}}{Additivity (integer up/down scaling) with free disposability.}
 }}
+
+\item{B}{number of bootstrap replicates in Conditional DEA.}
+
+\item{m}{number of units to be included in the reference set.}
+
+\item{seed}{Integer. Seed for reproducibility.}
 }
 \value{
 A \code{data.frame} equal to \code{data} (retaining all input \code{x} and

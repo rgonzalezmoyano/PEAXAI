@@ -22,6 +22,10 @@
 #'   \item \code{"train"}: an object fitted with \pkg{caret}.
 #'   \item \code{"glm"}: a binomial logistic regression model.
 #' }
+#' @param calibration_model Optional probability-calibration model applied to the raw
+#' predicted probabilities from \code{final_model} (e.g., Platt scaling or isotonic regression).
+#' If provided, calibrated probabilities are used for ranking and threshold-based decisions.
+#' Set to \code{NULL} to use uncalibrated predictions.
 #' @param efficiency_thresholds Numeric vector defining one or more efficiency probability
 #' thresholds to determine the attainable frontier or peer set.
 #' @param targets A named list containing, for each efficiency threshold, the corresponding
@@ -54,25 +58,76 @@
 #' @importFrom stats predict
 #'
 #' @examples
-#' \dontrun{
-#' # Example with caret model:
-#' model <- caret::train(x = ..., y = ..., method = "rf", ...)
-#' rankings <- PEAXAI_ranking(
-#'   data = mydata,
-#'   x = 1:3, y = 4:5,
-#'   final_model = model,
-#'   efficiency_thresholds = c(0.8, 0.9),
-#'   targets = my_targets,
-#'   rank_basis = "attainable"
-#' )
+#' \donttest{
+#'   data("firms", package = "PEAXAI")
+#'
+#'   data <- subset(
+#'     firms,
+#'     autonomous_community == "Comunidad Valenciana"
+#'   )
+#'
+#'   x <- 1:4
+#'   y <- 5
+#'   RTS <- "vrs"
+#'   imbalance_rate <- NULL
+#'
+#'   trControl <- list(
+#'     method = "cv",
+#'     number = 3
+#'   )
+#'
+#'   # glm method
+#'   methods <- list(
+#'     "glm" = list(
+#'       weights = "dinamic"
+#'      )
+#'   )
+#'
+#'   metric_priority <- c("Balanced_Accuracy", "ROC_AUC")
+#'
+#'   models <- PEAXAI_fitting(
+#'     data = data, x = x, y = y, RTS = RTS,
+#'     imbalance_rate = imbalance_rate,
+#'     methods = methods,
+#'     trControl = trControl,
+#'     metric_priority = metric_priority,
+#'     verbose = FALSE,
+#'     seed = 1
+#'   )
+#'
+#'   final_model <- models[["best_model_fit"]][["glm"]]
+#'
+#'   relative_importance <- PEAXAI_global_importance(
+#'     data = data, x = x, y = y,
+#'     final_model = final_model,
+#'     background = "real", target = "real",
+#'     importance_method = list(name = "PI", n.repetitions = 5)
+#'   )
+#'
+#'   efficiency_thresholds <- seq(0.75, 0.95, 0.1)
+#'
+#'   directional_vector <- list(relative_importance = relative_importance,
+#'   scope = "global", baseline  = "mean")
+#'
+#'   targets <- PEAXAI_targets(data = data, x = x, y = y, final_model = final_model,
+#'   efficiency_thresholds = efficiency_thresholds, directional_vector = directional_vector,
+#'   n_expand = 0.5, n_grid = 50, max_y = 2, min_x = 1)
+#'
+#'   ranking <- PEAXAI_ranking(data = data, x = x, y = y,
+#'   final_model = final_model, rank_basis = "predicted")
 #' }
 #'
 #' @export
 
 PEAXAI_ranking <- function(
-    data, x, y, final_model, efficiency_thresholds,
-    targets, rank_basis
+    data, x, y, final_model, calibration_model = NULL,
+    efficiency_thresholds, targets = NULL, rank_basis
     ) {
+
+  validate_parametes_PEAXAI_ranking(
+    data, x, y, final_model,
+    efficiency_thresholds, targets, rank_basis
+  )
 
   # reorder index 'x' and 'y' in data
   data <- data[, c(x,y)]
@@ -86,25 +141,34 @@ PEAXAI_ranking <- function(
 
   if (inherits(final_model, "train")) {
     # caret::train
-    prob_vector <- predict(final_model, newdata = data, type = "prob")["efficient"]
-  } else if (inherits(final_model, "glm")) {
-    # glm binomial
-    prob_vector <- as.numeric(predict(final_model, newdata = data, type = "response"))
+    prob_vector <- PEAXAI_predict(
+      data = data,
+      x = x,
+      y = y,
+      final_model = final_model,
+      calibration_model = calibration_model
+    )
+    # prob_vector <- predict(final_model, newdata = data, type = "prob")["efficient"]
   } else {
     stop("Unsupported model type.")
   }
 
-  id <- as.data.frame(c(1:nrow(data)))
-  names(id) <- "ID"
-  prob_vector <- cbind(id, prob_vector)
-  names(prob_vector)[2] <- "probability_predicted"
+  DMU <- as.data.frame(c(1:nrow(data)))
+  names(DMU) <- "DMU"
+  prob_vector <- cbind(DMU, prob_vector)
+  names(prob_vector)[2] <- "Probability_predicted"
 
   # ----------------------------------------------------------------------------
   # get ranking ----------------------------------------------------------------
   # ----------------------------------------------------------------------------
   if (rank_basis == "predicted") {
 
-    ranking_order <- prob_vector[order(prob_vector$probability_predicted, decreasing = TRUE), ]
+    position <- as.data.frame(1:nrow(prob_vector))
+    names(position) <- "Ranking"
+    ranking_order <- prob_vector[order(prob_vector[["Probability_predicted"]], decreasing = TRUE), ]
+
+    ranking_order <- cbind(position, ranking_order)
+    row.names(ranking_order) <- NULL
 
     return(ranking_order)
 
@@ -115,15 +179,22 @@ PEAXAI_ranking <- function(
 
     for(thr in as.character(efficiency_thresholds)) {
 
-      ranking_order <- cbind(prob_vector, targets[[thr]][["beta"]])
-      names(ranking_order)[4] <- "probability_target"
+      position <- as.data.frame(1:nrow(prob_vector))
+      names(position) <- "Ranking"
+
+      ranking_order <- cbind(prob_vector, targets[[thr]][["inefficiencies"]])
+      names(ranking_order)[4] <- "Probability_target"
 
       ranking_order <- ranking_order[order(
-        -ranking_order$probability_target,
-        ranking_order$beta,
-        -ranking_order$probability_predicted),]
+        -ranking_order$Probability_target,
+        ranking_order$betas,
+        -ranking_order$Probability_predicted),]
+
+      ranking_order <- cbind(position, ranking_order)
+      row.names(ranking_order) <- NULL
 
       list_ranking[[thr]] <- ranking_order
+
     }
 
     return(list_ranking)

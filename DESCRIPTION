@@ -1,6 +1,6 @@
 Package: PEAXAI
-Title: Probabilistic Efficiency Analysis Using Explainable Artificial Intelligence (XAI)
-Version: 0.1.0
+Title: Probabilistic Efficiency Analysis Using Explainable Artificial Intelligence
+Version: 1.0.0
 Authors@R:
   c(
     person(given = "Ricardo",
@@ -21,19 +21,24 @@ Authors@R:
            role = "aut",
            comment = c(ORCID = "0000-0002-1807-6180"))
   )
-Description: Provides a probabilistic framework that integrates Data
-  Envelopment Analysis (DEA) with machine-learning classifiers to estimate
-  the (in)efficiency status and the probability of efficiency for
-  decision-making units. Models are trained on DEA-derived labels and
-  evaluated via 'caret', enabling explainable workflows with global
-  diagnostics (e.g., permutation importance, Shapley-value summaries via
-  'fastshap', and sensitivity analysis) and effect plots (partial and
-  accumulated dependence), probability-threshold peer selection, and
-  counterfactual improvement suggestions for benchmarking and policy
-  analysis.
-License: file LICENSE
+Description: Provides a probabilistic framework that integrates Data Envelopment
+  Analysis (DEA) (Banker et al., 1984) <doi:10.1287/mnsc.30.9.1078> with machine
+  learning classifiers (Kuhn, 2008) <doi:10.18637/jss.v028.i05> to estimate both the
+  (in)efficiency status and the probability of efficiency for decision-making
+  units. The approach trains predictive models on DEA-derived efficiency labels
+  (Charnes et al., 1985) <doi:10.1016/0304-4076(85)90133-2>, enabling explainable
+  artificial intelligence (XAI) workflows with global and local interpretability
+  tools, including permutation importance (Molnar et al., 2018) <doi:10.21105/joss.00786>,
+  Shapley value explanations (Strumbelj & Kononenko, 2014) <doi:10.1007/s10115-013-0679-x>,
+  and sensitivity analysis (Cortez, 2011) <https://CRAN.R-project.org/package=rminer>.
+  The framework also supports probability-threshold peer selection and counterfactual
+  improvement recommendations for benchmarking and policy evaluation. The probabilistic
+  efficiency framework is detailed in González-Moyano et al. (2025)
+  "Probability-based Technical Efficiency Analysis through Machine Learning",
+  in review for publication.
+License: GPL-3
 URL: https://github.com/rgonzalezmoyano/PEAXAI
-BugReports: https://github.com/peaxai/PEAXAI/issues
+BugReports: https://github.com/rgonzalezmoyano/PEAXAI/issues
 Encoding: UTF-8
 Language: en
 Roxygen: list(markdown = TRUE)
@@ -43,12 +48,16 @@ Depends:
 Imports:
   Benchmarking,
   caret,
+  deaR,
   dplyr,
   fastshap,
   iml,
   PRROC,
   pROC,
-  rminer
+  rminer,
+  stats,
+  rms,
+  isotone
 Suggests:
   ggplot2,
   knitr,

@@ -9,8 +9,9 @@ PEAXAI_ranking(
   x,
   y,
   final_model,
+  calibration_model = NULL,
   efficiency_thresholds,
-  targets,
+  targets = NULL,
   rank_basis
 )
 }
@@ -27,6 +28,11 @@ Supported types are:
 \item \code{"train"}: an object fitted with \pkg{caret}.
 \item \code{"glm"}: a binomial logistic regression model.
 }}
+
+\item{calibration_model}{Optional probability-calibration model applied to the raw
+predicted probabilities from \code{final_model} (e.g., Platt scaling or isotonic regression).
+If provided, calibrated probabilities are used for ranking and threshold-based decisions.
+Set to \code{NULL} to use uncalibrated predictions.}
 
 \item{efficiency_thresholds}{Numeric vector defining one or more efficiency probability
 thresholds to determine the attainable frontier or peer set.}
@@ -73,17 +79,63 @@ by the magnitude of \eqn{\beta} (ascending), and then by the predicted probabili
 (descending).
 }
 \examples{
-\dontrun{
-# Example with caret model:
-model <- caret::train(x = ..., y = ..., method = "rf", ...)
-rankings <- PEAXAI_ranking(
-  data = mydata,
-  x = 1:3, y = 4:5,
-  final_model = model,
-  efficiency_thresholds = c(0.8, 0.9),
-  targets = my_targets,
-  rank_basis = "attainable"
-)
+\donttest{
+  data("firms", package = "PEAXAI")
+
+  data <- subset(
+    firms,
+    autonomous_community == "Comunidad Valenciana"
+  )
+
+  x <- 1:4
+  y <- 5
+  RTS <- "vrs"
+  imbalance_rate <- NULL
+
+  trControl <- list(
+    method = "cv",
+    number = 3
+  )
+
+  # glm method
+  methods <- list(
+    "glm" = list(
+      weights = "dinamic"
+     )
+  )
+
+  metric_priority <- c("Balanced_Accuracy", "ROC_AUC")
+
+  models <- PEAXAI_fitting(
+    data = data, x = x, y = y, RTS = RTS,
+    imbalance_rate = imbalance_rate,
+    methods = methods,
+    trControl = trControl,
+    metric_priority = metric_priority,
+    verbose = FALSE,
+    seed = 1
+  )
+
+  final_model <- models[["best_model_fit"]][["glm"]]
+
+  relative_importance <- PEAXAI_global_importance(
+    data = data, x = x, y = y,
+    final_model = final_model,
+    background = "real", target = "real",
+    importance_method = list(name = "PI", n.repetitions = 5)
+  )
+
+  efficiency_thresholds <- seq(0.75, 0.95, 0.1)
+
+  directional_vector <- list(relative_importance = relative_importance,
+  scope = "global", baseline  = "mean")
+
+  targets <- PEAXAI_targets(data = data, x = x, y = y, final_model = final_model,
+  efficiency_thresholds = efficiency_thresholds, directional_vector = directional_vector,
+  n_expand = 0.5, n_grid = 50, max_y = 2, min_x = 1)
+
+  ranking <- PEAXAI_ranking(data = data, x = x, y = y,
+  final_model = final_model, rank_basis = "predicted")
 }
 
 }

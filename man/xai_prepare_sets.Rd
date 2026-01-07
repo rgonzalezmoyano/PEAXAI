@@ -47,21 +47,3 @@ Extracts and formats the training and/or target datasets from a machine learning
 allowing for distinction between using the full training data or only the original subset used for modeling.
 It standardizes the class column to be named \code{"class_efficiency"} and positions it as the last column.
 }
-\examples{
-\dontrun{
-model <- caret::train(y ~ ., data = my_data, method = "rf")
-result <- xai_prepare_sets(
-  data = my_data,
-  x = NULL, y = NULL,
-  final_model = model,
-  background = "train",
-  target = "real",
-  type = NULL,
-  threshold = NULL,
-  levels_order = c("not_efficient", "efficient")
-)
-str(result$train_data)
-str(result$target_data)
-}
-
-}

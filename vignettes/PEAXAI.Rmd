@@ -1,13 +1,12 @@
 ---
 title: "PEAXAI: Probabilistic Efficiency Analysis using Explainable Artificial Intelligence"
-date: "`r Sys.Date()`"
 author: "Institute 'Center of Operations Research', Miguel Hernández University of Elche"
 output:
   rmarkdown::html_vignette:
     toc: true
     number_sections: false
 vignette: >
-  %\VignetteIndexEntry{PEAXAI: Example with Firms}
+  %\VignetteIndexEntry{PEAXAI: Probabilistic Efficiency Analysis using Explainable Artificial Intelligence}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -104,7 +103,7 @@ To address class imbalance, we apply SMOTE based on the best-practice frontier (
 
 When the efficient class is the minority, efficient-class SMOTE on the best-practice frontier helps the classifier learn the frontier more accurately. Optionally, if the observed imbalance still falls short of the target ratio, we also generate near-frontier inefficient synthetic units derived from the frontier geometry to sharpen the separation between efficient and inefficient regions.
 ```{r}
-imbalance_rate <- seq(0.2, 0.4, 0.05) 
+imbalance_rate <- seq(0.05, 0.4, 0.05) 
 ```
 
 Define machine learning methods and their tuning parameters. Here we configure a neural network (nnet) with a grid of hyperparameters
@@ -138,7 +137,7 @@ trControl <- list(
 
 Classification metrics to optimize during training (priority order in case of ties)
 ```{r}
-metric_priority <- c("F1", "Balanced Accuracy", "ROC-AUC")
+metric_priority <- c("Balanced_Accuracy", "Precision")
 ```
 
 Define hold-out sample to evaluate model performance on unseen data. These samples are excluded from the cross-validation and hyperparameter tuning process. By default, is `NULL`.
@@ -149,7 +148,6 @@ hold_out <- NULL
 Set random seed for reproducibility (ensures consistent results across runs).
 ```{r}
 seed <- 1
-set.seed(seed)
 ```
 
 ## Apply PEAXAI: from efficiency labeling to ML-based classification
@@ -161,7 +159,7 @@ We now apply the full PEAXAI pipeline:
 3. Train the machine learning classifier with cross-validation,
 4. Select the best model according to multiple performance metrics.
  
-```{r}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 models <- PEAXAI_fitting(
   data = data,
   x = x,
@@ -171,30 +169,38 @@ models <- PEAXAI_fitting(
   methods = methods,
   trControl = trControl,
   metric_priority = metric_priority,
+  calibration_method = NULL,
   hold_out = hold_out,
-  verbose = TRUE
+  verbose = TRUE,
+  seed = seed
 )
 ```
+
+```{r echo=FALSE}
+models$best_model_fit
+```
+
+```{r echo=FALSE}
+models$performance_train
+```
+
 
 ## XAI method for global importance
-This example uses the SA (Sensitivity Analysis) method from the rminer package—specifically the 1D perturbation scheme with the AAD measure—to compute global relative importance with `PEAXAI_global_importance.` For alternative XAI methods and options, see the package documentation.
+This example uses SHAP (SHapley Additive exPlanations) computed with the fastshap package to estimate global feature importance with `PEAXAI_global_importance`. We approximate Shapley values via Monte Carlo sampling (`nsim`) and obtain a global importance score by aggregating absolute SHAP values across observations (and then normalizing to relative importance). For alternative XAI methods and options, see the package documentation.
 ```{r}
 importance_method <- list(
-  name = "SA",
-  method = "1D-SA",
-  measures = "AAD", 
-  levels = 7,
-  baseline = "mean"
+    name = "SHAP",
+    nsim = 200
 )
 ```
 
-## Apply XAI method on the model fine-tuneed.
+## Apply XAI method on the model fine-tuned.
 If the method needs a reference distribution or to train a surrogate, use `background` to choose that dataset.
 `target` selects the dataset on which explanations are computed.
 
-If `target` = "train", relative importances are computed on the training distribution and thus reflect what the model actually learned during fitting.
+If `target` = `train`, relative importances are computed on the training distribution and thus reflect what the model actually learned during fitting.
 
-If `target` = "real", relative importances are computed on a dataset intended to approximate the real-world (deployment) distribution, yielding importances that better represent the underlying problem as observed in practice.
+If `target` = `real`, relative importances are computed on a dataset intended to approximate the real-world (deployment) distribution, yielding importances that better represent the underlying problem as observed in practice.
 
 ```{r}
 relative_importance <- PEAXAI_global_importance(
@@ -208,6 +214,10 @@ relative_importance <- PEAXAI_global_importance(
 )
 ```
 
+```{r echo=FALSE}
+relative_importance
+```
+
 ## Selected efficiency thresholds
 We evaluate results at three efficiency cutoffs: 0.75, 0.85, and 0.95.
 ```{r}
@@ -219,10 +229,27 @@ We define a global, model-aware direction for improving inputs/outputs.
 
 `relative_importance` guides the direction using the model’s global importance.
 
-`scope` = "global" applies a single direction to all DMUs.
+`scope` = `global` applies a single direction to all DMUs.
 
-`baseline` = "mean" centers perturbations around the training mean.
+`baseline` = `mean` centers perturbations around the training mean.
 
+The argument `relative_importance` is the direction to make the counterfactual analysis. The directional vector can be custom or provided by PEAXAI_global_importance funtion.
+
+For example, if the directional vector is custom:
+If it not possible (or we do not want) to change a specific input (like `employees`), we need to write:
+```{r}
+relative_importance_custom <- t(matrix(
+  data = c(0.2, 0, 0.2, 0.2, 0.4),
+))
+relative_importance_custom <- as.data.frame(relative_importance_custom)
+names(relative_importance_custom) <- names(data)[c(x,y)]
+```
+
+```{r echo=FALSE}
+relative_importance_custom
+```
+
+But, if we do not know which direction define, we can use the relative importace by the model fitted:
 ```{r}
 directional_vector <- list(
   relative_importance = relative_importance,
@@ -256,12 +283,20 @@ targets <- PEAXAI_targets(
 )
 ```
 
+```{r}
+head(targets[["0.85"]][["counterfactual_dataset"]], 10)
+```
+
+```{r}
+head(targets[["0.85"]][["inefficiencies"]], 10)
+```
+
 ## Efficiency rankings
 We compute efficiency rankings at each threshold using two bases:
 
-`Predicted`: ranks by the model’s predicted probability of being efficient (rank_basis = "predicted").
+`Predicted`: ranks by the model’s predicted probability of being efficient (`rank_basis` = `predicted`).
 
-`Attainable`: ranks by attainable improvements/targets implied by the model (rank_basis = "attainable").
+`Attainable`: ranks by attainable improvements/targets implied by the model (`rank_basis` = `attainable`).
 
 ```{r}
 ranking <- PEAXAI_ranking(
@@ -269,8 +304,6 @@ ranking <- PEAXAI_ranking(
   x = x,
   y = y,
   final_model = models[["best_model_fit"]][["nnet"]],
-  efficiency_thresholds = efficiency_thresholds,
-  targets = targets,
   rank_basis = "predicted"
 )
 
@@ -285,6 +318,16 @@ ranking2 <- PEAXAI_ranking(
   )
 ```
 
+```{r}
+head(round(ranking, 4), 50)
+```
+
+
+
+```{r}
+head(round(ranking2[["0.85"]], 4), 50)
+```
+
 ## Peers by efficiency thresholds
 For each threshold, we identify peer DMUs that serve as reference comparators.
 
@@ -295,8 +338,14 @@ peers <- PEAXAI_peer(
   x = x,
   y = y,
   final_model = models[["best_model_fit"]][["nnet"]],
+  targets = targets,
   efficiency_thresholds = efficiency_thresholds,
   weighted = FALSE,
   relative_importance = relative_importance
 )
 ```
+
+```{r}
+head(peers, 50)
+```
+

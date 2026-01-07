@@ -9,7 +9,9 @@ PEAXAI_peer(
   x,
   y,
   final_model,
+  calibration_model = NULL,
   efficiency_thresholds,
+  targets,
   weighted = FALSE,
   relative_importance = NULL
 )
@@ -23,7 +25,14 @@ PEAXAI_peer(
 
 \item{final_model}{A fitted classification model used to estimate efficiency probabilities. Supported classes: \code{"train"} (from \pkg{caret}) or \code{"glm"} (binomial).}
 
+\item{calibration_model}{Optional probability-calibration model applied to the raw
+predicted probabilities from \code{final_model} (e.g., Platt scaling or isotonic regression).
+If provided, calibrated probabilities are used for ranking and threshold-based decisions.
+Set to \code{NULL} to use uncalibrated predictions.}
+
 \item{efficiency_thresholds}{Numeric vector indicating the minimum probability values required to consider a DMU as efficient.}
+
+\item{targets}{A named list containing, for each efficiency threshold, the corresponding}
 
 \item{weighted}{Logical. If \code{TRUE}, peers are selected using weighted Euclidean distances based on variable importance. If \code{FALSE} (default), unweighted distances are used.}
 
@@ -43,11 +52,63 @@ This function enables probabilistic peer identification under uncertainty, suppo
 When \code{weighted = TRUE}, variable weights (e.g., derived from feature importance) modulate the peer selection process, allowing for context-aware benchmarking.
 }
 \examples{
-\dontrun{
-# Example using caret model:
-model <- caret::train(x = ..., y = ..., method = "rf", ...)
-peers <- PEAXAI_peer(data = mydata, x = 1:4, y = 5, final_model = model,
-                     efficiency_thresholds = c(0.8, 0.9), weighted = FALSE)
+\donttest{
+  data("firms", package = "PEAXAI")
+
+  data <- subset(
+    firms,
+    autonomous_community == "Comunidad Valenciana"
+  )
+
+  x <- 1:4
+  y <- 5
+  RTS <- "vrs"
+  imbalance_rate <- NULL
+
+  trControl <- list(
+    method = "cv",
+    number = 3
+  )
+
+  # glm method
+  methods <- list(
+    "glm" = list(
+      weights = "dinamic"
+     )
+   )
+
+  metric_priority <- c("Balanced_Accuracy", "ROC_AUC")
+
+  models <- PEAXAI_fitting(
+    data = data, x = x, y = y, RTS = RTS,
+    imbalance_rate = imbalance_rate,
+    methods = methods,
+    trControl = trControl,
+    metric_priority = metric_priority,
+    verbose = FALSE,
+    seed = 1
+  )
+
+  final_model <- models[["best_model_fit"]][["glm"]]
+
+  relative_importance <- PEAXAI_global_importance(
+    data = data, x = x, y = y,
+    final_model = final_model,
+    background = "real", target = "real",
+    importance_method = list(name = "PI", n.repetitions = 5)
+  )
+
+  efficiency_thresholds <- seq(0.75, 0.95, 0.1)
+
+  directional_vector <- list(relative_importance = relative_importance,
+  scope = "global", baseline  = "mean")
+
+  targets <- PEAXAI_targets(data = data, x = x, y = y, final_model = final_model,
+  efficiency_thresholds = efficiency_thresholds, directional_vector = directional_vector,
+  n_expand = 0.5, n_grid = 50, max_y = 2, min_x = 1)
+
+  peers <- PEAXAI_peer(data = data, x = x, y = y, final_model = final_model,
+  efficiency_thresholds = efficiency_thresholds, targets = targets, weighted = FALSE)
 }
 
 }

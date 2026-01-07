@@ -21,28 +21,37 @@
 #' @return It returns a \code{data.frame} with the newly created set of DMUs incorporated.
 #' @export
 
-SMOTE_data <- function (
+SMOTE_Z_data <- function (
     data, x, y, RTS = "vrs", balance_data, seed
 ) {
 
-  # first, determine the efficient facets
-  facets <- convex_facets(
-    data = data,
-    x = x,
-    y = y,
-    RTS = RTS,
-    balance_data = balance_data
-  )
+  # # first, determine the efficient facets
+  # facets <- convex_facets(
+  #   data = data,
+  #   x = x,
+  #   y = y,
+  #   RTS = RTS,
+  #   balance_data = balance_data
+  # )
+  #
+  # # second, populate the efficient facets
+  # balance_datasets <- get_SMOTE_DMUs(
+  #   data = data,
+  #   facets = facets,
+  #   x = x,
+  #   y = y,
+  #   balance_data = balance_data,
+  #   seed = seed,
+  # )
+  browser()
 
-  # second, populate the efficient facets
-  balance_datasets <- get_SMOTE_DMUs(
-    data = data,
-    facets = facets,
-    x = x,
-    y = y,
-    balance_data = balance_data,
-    seed = seed,
-  )
+  # expand grid of regions
+
+
+
+
+  # for (i in 1:nrow())
+
 
   return(balance_datasets)
 }

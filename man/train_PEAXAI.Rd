@@ -4,7 +4,7 @@
 \alias{train_PEAXAI}
 \title{Training a Classification Machine Learning Model}
 \usage{
-train_PEAXAI(data, method, parameters, trControl, metric_priority)
+train_PEAXAI(data, method, parameters, trControl, metric_priority, seed)
 }
 \arguments{
 \item{data}{A \code{data.frame} or \code{matrix} containing the variables in the model.}
@@ -15,7 +15,9 @@ train_PEAXAI(data, method, parameters, trControl, metric_priority)
 
 \item{trControl}{A \code{list} of selected machine learning learning.}
 
-\item{metric_priority}{dfdfd}
+\item{metric_priority}{A \code{string} specifying the summary metric for classification to select the optimal model. Default includes \code{"Balanced_Accuracy"} due to (normally) unbalanced data.}
+
+\item{seed}{Integer. Seed for reproducibility.}
 }
 \value{
 It returns a \code{list} with the chosen model.
