@@ -4,7 +4,20 @@
 \alias{SMOTE_Z_data}
 \title{Create New SMOTE Units to Balance Data combinations of m + s}
 \usage{
-SMOTE_Z_data(data, x, y, RTS = "vrs", balance_data, seed)
+SMOTE_Z_data(
+  data,
+  x,
+  y,
+  z_numeric,
+  z_factor,
+  balance_data,
+  RTS = "vrs",
+  B,
+  m,
+  alpha,
+  bandwidth = NULL,
+  seed
+)
 }
 \arguments{
 \item{data}{A \code{data.frame} containing the variables used in the model.}
@@ -12,6 +25,8 @@ SMOTE_Z_data(data, x, y, RTS = "vrs", balance_data, seed)
 \item{x}{Column indexes of the input variables in the \code{data}.}
 
 \item{y}{Column indexes of the output variables in the \code{data}.}
+
+\item{balance_data}{Indicate level of efficient units to achive and the number of efficient and not efficient units.}
 
 \item{RTS}{Text string or number defining the underlying DEA technology /
 returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
@@ -24,9 +39,9 @@ returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 \item{\code{5} / \code{"add"}}{Additivity (scaling up and down, but only with integers), and free disposability.}
 }}
 
-\item{balance_data}{Indicate level of efficient units to achive and the number of efficient and not efficient units.}
-
 \item{seed}{Integer. Seed for reproducibility.}
+
+\item{similarity}{matrix of similarities. In alternative to provide the exogenous variables, the matrix of similarities can be directly provided. This allow to customize the estimation of the similarities.}
 }
 \value{
 It returns a \code{data.frame} with the newly created set of DMUs incorporated.

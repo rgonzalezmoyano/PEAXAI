@@ -15,6 +15,7 @@ label_efficiency(
   B = NULL,
   alpha = FALSE,
   m = NULL,
+  bandwidth = NULL,
   seed
 )
 }

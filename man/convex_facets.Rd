@@ -4,7 +4,7 @@
 \alias{convex_facets}
 \title{Create New SMOTE Units to Balance Data combinations of m + s}
 \usage{
-convex_facets(data, x, y, RTS = "vrs", balance_data = NULL)
+convex_facets(data, x, y, RTS = "vrs")
 }
 \arguments{
 \item{data}{A \code{data.frame} containing the variables used in the model.}
@@ -23,8 +23,6 @@ returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 \item{\code{4} / \code{"irs"}}{Increasing returns to scale (up-scaling, not down-scaling), convexity and free disposability.}
 \item{\code{5} / \code{"add"}}{Additivity (scaling up and down, but only with integers), and free disposability.}
 }}
-
-\item{balance_data}{A numeric vector indicating the different levels of balance required (e.g., c(0.1, 0.45, 0.6)).}
 }
 \value{
 It returns a \code{data.frame} with the newly created set of DMUs incorporated.

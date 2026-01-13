@@ -30,8 +30,7 @@ SMOTE_data <- function (
     data = data,
     x = x,
     y = y,
-    RTS = RTS,
-    balance_data = balance_data
+    RTS = RTS
   )
 
   # second, populate the efficient facets

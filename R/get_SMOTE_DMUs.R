@@ -194,7 +194,8 @@ get_SMOTE_DMUs <- function (
 
         # first, select a random index and combination
         # number of dimensions
-        random_convex <- sample(idx_eff, size = length(c(x,y)), replace = FALSE)
+        n_combinations <- length(facets)
+        random_convex <- sample(idx_eff, size = n_combinations, replace = FALSE)
         selection <- data[unlist(as.vector(random_convex)), c(x,y)]
 
         # second, determine random weights by DMU

@@ -60,6 +60,7 @@
 #' @importFrom utils combn tail
 #' @importFrom rms val.prob
 #' @importFrom isotone gpava
+#' @importFrom np npudensbw
 #'
 #' @return A \code{"PEAXAI"} (list) with the best technique, best fitted models and their performance and the results by fold.
 #'
@@ -204,9 +205,21 @@ PEAXAI_fitting <- function (
   # copy of methods
   method_copy <- methods
 
+  exogenous <- c(z_numeric, z_factor)
+
+  # Similarity matrix of ALL dataset
+  if (!is.null(exogenous)) {
+
+    bandwidth <- npudensbw(dat = data[,exogenous])
+
+  } else {
+    bandwidth <- NULL
+  }
+
   # ----------------------------------------------------------------------------
   # Step 1: Data labeling ------------------------------------------------------
   # ----------------------------------------------------------------------------
+
   data <- label_efficiency(
     data = data,
     x = x,
@@ -217,6 +230,7 @@ PEAXAI_fitting <- function (
     B = B,
     m = m,
     alpha = alpha,
+    bandwidth = bandwidth,
     seed = seed
   )
 
@@ -330,6 +344,7 @@ PEAXAI_fitting <- function (
           B = B,
           m = m,
           alpha = alpha,
+          bandwidth = bandwidth,
           seed = seed
         )
 
@@ -422,15 +437,17 @@ PEAXAI_fitting <- function (
     # re-label only on train
     train_set <- label_efficiency(
       data = train_set,
-      REF  = train_set,
+      REF = train_set,
       x = x,
       y = y,
       z_numeric = z_numeric,
       z_factor = z_factor,
       RTS = RTS,
       B = B,
-      m = m,
-      alpha = alpha
+      m = nrow(train_set)^(2/3),
+      bandwidth = NULL,
+      alpha = alpha,
+      seed = seed
     )
 
     # --------------------------------------------------------------------------
@@ -445,14 +462,36 @@ PEAXAI_fitting <- function (
 
       if (as.character(RTS) %in% RTS_available) {
 
-        train_data_SMOTE <- SMOTE_data(
-          data = train_set,
-          x = x,
-          y = y,
-          RTS = RTS,
-          balance_data = imbalance_rate,
-          seed = seed
-        )
+        if (is.null(z_numeric) & is.null(z_numeric)) {
+
+          train_data_SMOTE <- SMOTE_data(
+            data = train_set,
+            x = x,
+            y = y,
+            RTS = RTS,
+            balance_data = imbalance_rate,
+            seed = seed
+          )
+
+        } else {
+
+          # create new datasets addressing imbalance
+          train_data_SMOTE <- SMOTE_Z_data(
+            data = train_set,
+            x = x,
+            y = y,
+            z_numeric = z_numeric,
+            z_factor = z_factor,
+            balance_data = imbalance_rate,
+            RTS = RTS,
+            B = B,
+            m = m,
+            alpha = alpha,
+            bandwidth = NULL,
+            seed = seed
+          )
+
+        }
 
         datasets_to_train <- append(train_data_SMOTE, datasets_to_train, after = 0)
 

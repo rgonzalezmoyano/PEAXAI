@@ -26,6 +26,7 @@
 #'     \item{\code{4} / \code{"irs"}}{Increasing returns to scale (up-scaling only, convexity + free disposability).}
 #'     \item{\code{5} / \code{"add"}}{Additivity (integer up/down scaling) with free disposability.}
 #'   }
+#' @param bandwidth
 #' @param seed  Integer. Seed for reproducibility.
 #'
 #' @details
@@ -33,6 +34,7 @@
 #' scores and derive the binary efficiency label.
 #'
 #' @importFrom Benchmarking dea.add
+#' @importFrom np npudensbw npudens
 #'
 #' @return
 #' A \code{data.frame} equal to \code{data} (retaining all input \code{x} and
@@ -50,7 +52,7 @@
 
 label_efficiency <- function (
     data, REF = data, x, y, z_numeric = NULL, z_factor = NULL, RTS = "vrs",
-    B = NULL, alpha = FALSE, m = NULL, seed
+    B = NULL, alpha = FALSE, m = NULL, bandwidth = NULL, seed
   ) {
 
   # check if parameters are well introduced
@@ -111,11 +113,17 @@ label_efficiency <- function (
       ci_up <- rep(0,n)
     }
 
-    exogenous <- c(z_numeric, z_factor)
-
     # 1 determine bandwidths
     message(c("R is now computing the bandwidth using the function npudensbw in the package np"))
-    bw <- np::npudensbw(dat = data[,exogenous])
+
+    exogenous <- c(z_numeric, z_factor)
+
+    # calculate similarity matrix
+    if (is.null(bandwidth)) {
+      bw <- npudensbw(dat = data[,exogenous])
+    } else {
+      bw <- bandwidth
+    }
 
     # 2 similarity by unit
     message(c("R is now computing the conditional DEA"))
@@ -124,7 +132,7 @@ label_efficiency <- function (
     for (i in 1:n) {
 
       # compute the similarity for each obs i
-      kerz <- np::npudens(
+      kerz <- npudens(
         bws = bw,
         cykertype = "epanechnikov",
         cxkertype = "epanechnikov",
@@ -192,6 +200,7 @@ label_efficiency <- function (
           ci_low[i] <- stats::quantile(DEA_B[DEA_B != -Inf & DEA_B != Inf], alpha/2)
           ci_up[i] <- stats::quantile(DEA_B[DEA_B != -Inf & DEA_B != Inf], 1-alpha/2)
         }
+
       }
     }
 
@@ -203,9 +212,10 @@ label_efficiency <- function (
     }
 
     # assing efficiency
-    labels <- ifelse(round(save$ci_up, 4) == 0, "efficient", "not_efficient")
+    labels <- ifelse(round(save$ci_low, 4) == 0, "efficient", "not_efficient")
     table(labels)
 
+    # if (labels == "efficient") {browser()}
     data$class_efficiency <- factor(
       labels,
       levels = c("efficient", "not_efficient"))
