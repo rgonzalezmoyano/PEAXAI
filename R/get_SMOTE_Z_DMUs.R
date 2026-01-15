@@ -259,130 +259,151 @@ get_SMOTE_Z_DMUs <- function (
         # paste z_varaibles
         new_unit <- cbind(new_unit, current_z_factor)
 
-        ###### DEA conditional
+        # compute the DEA for unit i
+        DEA_B <- Benchmarking::dea(
+        X = new_unit[,x],
+        Y = new_unit[,y],
+        RTS = RTS,
+        ORIENTATION = "in-out",
+        DIRECT = TRUE,
+        XREF = data[data$class_efficiency == "efficient",x],
+        YREF = data[data$class_efficiency == "efficient",y])$eff
 
-        # conditional DEA
-        # define preliminary variables:
-        # n <- nrow(data) # number of observations
-        k <- NCOL(data[,c(y)]) # number of outputs
-        s <- NCOL(data[,c(x)]) # number of inputs
-
-        # initialize
-        eff <- 0
-        DEA_B <- rep(0, B) # bootstrap
-
-        if (alpha != FALSE) {
-          ci_low <- 0
-          ci_up <- 0
-        }
-
-        # 1 determine bandwidths
-        # message(c("R is now computing the bandwidth using the function npudensbw in the package np"))
-
-        exogenous <- c(z_numeric, z_factor)
-
-        # calculate similarity matrix
-        # if (is.null(bandwidth)) {
-        #   bw <- npudensbw(dat = data_i[,exogenous])
-        # } else {
-          bw <- bandwidth
+        # ###### DEA conditional
+        #
+        # # conditional DEA
+        # # define preliminary variables:
+        # # n <- nrow(data) # number of observations
+        # k <- NCOL(data[,c(y)]) # number of outputs
+        # s <- NCOL(data[,c(x)]) # number of inputs
+        #
+        # # initialize
+        # eff <- 0
+        # DEA_B <- rep(0, B) # bootstrap
+        #
+        # if (alpha != FALSE) {
+        #   ci_low <- 0
+        #   ci_up <- 0
         # }
-
-        # 2 similarity by unit
-        # message(c("R is now computing the conditional DEA"))
-
-        # set.seed(seed)
-
-        REF_data_i <- rbind(REF_data[,c(x,y,z_numeric,z_factor)], new_unit)
-
-        # compute the similarity for each obs i
-        kerz <- npudens(
-          bws = bw,
-          cykertype = "epanechnikov",
-          cxkertype = "epanechnikov",
-          tdat = new_unit[,exogenous, drop = FALSE],
-          edat = REF_data_i[,exogenous, drop = FALSE])
-
-        similarity_new_unit <- cbind(kerz$dens)
-
-        # consider only the units that perform at least as good as unit i
-        y_i <- new_unit[, y]
-        x_i <- new_unit[, x]
-        Y_Rob <- REF_data_i[, y]
-        X_Rob <- REF_data_i[, x]
-        similarity_Rob <- similarity_new_unit
-
-        # mod
-        # Nueva condición: combinación de filtros input y output (dominancia fuerte)
-        cond_output <- matrix(TRUE, nrow = nrow(Y_Rob), ncol = k)
-
-        for (l in 1:k) {
-          cond_output[, l] <- Y_Rob[, l] >= as.numeric(y_i[l])
-        }
-
-        cond_input <- matrix(TRUE, nrow = nrow(X_Rob), ncol = s)
-
-        for (l in 1:s) {
-          cond_input[, l] <- X_Rob[, l] <= as.numeric(x_i[l])
-        }
-
-        # Intersección lógica: dominan en todos los outputs y usan menos inputs
-        combined_filter <- apply(cond_output, 1, all) & apply(cond_input, 1, all)
-
-        # Aplicar el filtro simultáneamente a todas las matrices
-        similarity_Rob <- similarity_Rob[combined_filter]
-        X_Rob <- as.data.frame(X_Rob[combined_filter,])
-        Y_Rob <- as.data.frame(Y_Rob[combined_filter,])
-        # mod
-
-        n_sample <- nrow(Y_Rob) #(equivalent to nrow(Y_Rob))
-
-        #pick a sample of random unit in the reference set if there are at least 2 units in the ref
-        if (n_sample < 2) {
-          eff <- 0
-        }
-        else {
-          for (j in 1:B) {
-            #select m random units
-            m_sample <- sample(n_sample, round(m,0), prob = similarity_Rob, replace = TRUE)
-            Y_ref <- as.data.frame(Y_Rob[m_sample,])
-            X_ref <- as.data.frame(X_Rob[m_sample,])
-
-            #compute the DEA for unit i
-            DEA_B[j] <- Benchmarking::dea(
-              X = new_unit[,x],
-              Y = new_unit[,y],
-              RTS = RTS,
-              ORIENTATION = "in-out",
-              DIRECT = TRUE,
-              XREF = X_ref,
-              YREF = Y_ref)$eff
-          }
-
-          eff <- mean(DEA_B[DEA_B != -Inf & DEA_B != Inf])
-          if (alpha != FALSE) {
-            ci_low <- stats::quantile(DEA_B[DEA_B != -Inf & DEA_B != Inf], alpha/2)
-            ci_up <- stats::quantile(DEA_B[DEA_B != -Inf & DEA_B != Inf], 1-alpha/2)
-          }
-        }
-
-        if(alpha != FALSE) {
-          save <- data.frame(eff, ci_low, ci_up)
-        }
-        else {
-          save <- data.frame(eff)
-        }
-
-        ##### end conditional DEA
-
+        #
+        # # 1 determine bandwidths
+        # # message(c("R is now computing the bandwidth using the function npudensbw in the package np"))
+        #
+        # exogenous <- c(z_numeric, z_factor)
+        #
+        # # calculate similarity matrix
+        # # if (is.null(bandwidth)) {
+        # #   bw <- npudensbw(dat = data_i[,exogenous])
+        # # } else {
+        #   bw <- bandwidth
+        # # }
+        #
+        # # 2 similarity by unit
+        # # message(c("R is now computing the conditional DEA"))
+        #
+        # # set.seed(seed)
+        #
+        # REF_data_i <- rbind(REF_data[,c(x,y,z_numeric,z_factor)], new_unit)
+        #
+        # # compute the similarity for each obs i
+        # kerz <- npudens(
+        #   bws = bw,
+        #   cykertype = "epanechnikov",
+        #   cxkertype = "epanechnikov",
+        #   tdat = new_unit[,exogenous, drop = FALSE],
+        #   edat = REF_data_i[,exogenous, drop = FALSE])
+        #
+        # similarity_new_unit <- cbind(kerz$dens)
+        #
+        # # consider only the units that perform at least as good as unit i
+        # y_i <- new_unit[, y]
+        # x_i <- new_unit[, x]
+        # Y_Rob <- REF_data_i[, y]
+        # X_Rob <- REF_data_i[, x]
+        # similarity_Rob <- similarity_new_unit
+        #
+        # # mod
+        # # Nueva condición: combinación de filtros input y output (dominancia fuerte)
+        # cond_output <- matrix(TRUE, nrow = nrow(Y_Rob), ncol = k)
+        #
+        # for (l in 1:k) {
+        #   cond_output[, l] <- Y_Rob[, l] >= as.numeric(y_i[l])
+        # }
+        #
+        # cond_input <- matrix(TRUE, nrow = nrow(X_Rob), ncol = s)
+        #
+        # for (l in 1:s) {
+        #   cond_input[, l] <- X_Rob[, l] <= as.numeric(x_i[l])
+        # }
+        #
+        # # Intersección lógica: dominan en todos los outputs y usan menos inputs
+        # combined_filter <- apply(cond_output, 1, all) & apply(cond_input, 1, all)
+        #
+        # # Aplicar el filtro simultáneamente a todas las matrices
+        # similarity_Rob <- similarity_Rob[combined_filter]
+        # X_Rob <- as.data.frame(X_Rob[combined_filter,])
+        # Y_Rob <- as.data.frame(Y_Rob[combined_filter,])
+        # # mod
+        #
+        # n_sample <- nrow(Y_Rob) #(equivalent to nrow(Y_Rob))
+        #
+        # #pick a sample of random unit in the reference set if there are at least 2 units in the ref
+        # if (n_sample < 2) {
+        #   eff <- 0
+        # }
+        # else {
+        #   for (j in 1:B) {
+        #     #select m random units
+        #     m_sample <- sample(n_sample, round(m,0), prob = similarity_Rob, replace = TRUE)
+        #     Y_ref <- as.data.frame(Y_Rob[m_sample,])
+        #     X_ref <- as.data.frame(X_Rob[m_sample,])
+        #
+        #     #compute the DEA for unit i
+        #     DEA_B[j] <- Benchmarking::dea(
+        #       X = new_unit[,x],
+        #       Y = new_unit[,y],
+        #       RTS = RTS,
+        #       ORIENTATION = "in-out",
+        #       DIRECT = TRUE,
+        #       XREF = X_ref,
+        #       YREF = Y_ref)$eff
+        #   }
+        #
+        #   eff <- mean(DEA_B[DEA_B != -Inf & DEA_B != Inf])
+        #   if (alpha != FALSE) {
+        #     ci_low <- stats::quantile(DEA_B[DEA_B != -Inf & DEA_B != Inf], alpha/2)
+        #     ci_up <- stats::quantile(DEA_B[DEA_B != -Inf & DEA_B != Inf], 1-alpha/2)
+        #   }
+        # }
+        #
+        # if(alpha != FALSE) {
+        #   save <- data.frame(eff, ci_low, ci_up)
+        # }
+        # else {
+        #   save <- data.frame(eff)
+        # }
+        #
+        #
+        # # assing efficiency
+        # label <- ifelse(round(save$ci_up, 4) < 0.0001, "efficient", "not_efficient")
+        #
+        # # save if the DMU is not_efficient
+        # if (label == "not_efficient") {
+        #
+        #   new_unit$class_efficiency <- "not_efficient"
+        #   new_unit$score <- round(save$ci_up, 4)
+        #   save_dataset <- rbind(save_dataset, new_unit)
+        #
+        # } # end check
+        # ##### end conditional DEA
         # assing efficiency
-        label <- ifelse(round(save$ci_up, 4) < 0.0001, "efficient", "not_efficient")
+        label <- ifelse(round(DEA_B, 4) < 0.0001, "efficient", "not_efficient")
 
         # save if the DMU is not_efficient
         if (label == "not_efficient") {
 
           new_unit$class_efficiency <- "not_efficient"
-          new_unit$score <- round(save$ci_up, 4)
+          new_unit$score <- round(DEA_B, 4)
           save_dataset <- rbind(save_dataset, new_unit)
 
         } # end check
@@ -471,8 +492,6 @@ get_SMOTE_Z_DMUs <- function (
           new_unit <- colSums(selection * normalize_lambda)
           new_unit <- as.data.frame(t(new_unit))
 
-
-
           # paste z_varaibles
           new_unit <- cbind(new_unit, current_z_factor)
 
@@ -484,125 +503,147 @@ get_SMOTE_Z_DMUs <- function (
           #   YREF = as.matrix(data_eff[,y]),
           #   RTS = RTS
           # )[["sum"]] < 0.0001
-          ###### DEA conditional
 
-          # conditional DEA
-          # define preliminary variables:
-          # n <- nrow(data) # number of observations
-          k <- NCOL(data[,c(y)]) # number of outputs
-          s <- NCOL(data[,c(x)]) # number of inputs
-
-          # initialize
-          eff <- 0
-          DEA_B <- rep(0, B) # bootstrap
-
-          if (alpha != FALSE) {
-            ci_low <- 0
-            ci_up <- 0
-          }
-
-          # 1 determine bandwidths
-          # message(c("R is now computing the bandwidth using the function npudensbw in the package np"))
-
-          exogenous <- c(z_numeric, z_factor)
-
-          # calculate similarity matrix
-          # if (is.null(bandwidth)) {
-          #   bw <- npudensbw(dat = data_i[,exogenous])
-          # } else {
-          bw <- bandwidth
+          # ###### DEA conditional
+          #
+          # # conditional DEA
+          # # define preliminary variables:
+          # # n <- nrow(data) # number of observations
+          # k <- NCOL(data[,c(y)]) # number of outputs
+          # s <- NCOL(data[,c(x)]) # number of inputs
+          #
+          # # initialize
+          # eff <- 0
+          # DEA_B <- rep(0, B) # bootstrap
+          #
+          # if (alpha != FALSE) {
+          #   ci_low <- 0
+          #   ci_up <- 0
           # }
+          #
+          # # 1 determine bandwidths
+          # # message(c("R is now computing the bandwidth using the function npudensbw in the package np"))
+          #
+          # exogenous <- c(z_numeric, z_factor)
+          #
+          # # calculate similarity matrix
+          # # if (is.null(bandwidth)) {
+          # #   bw <- npudensbw(dat = data_i[,exogenous])
+          # # } else {
+          # bw <- bandwidth
+          # # }
+          #
+          # # 2 similarity by unit
+          # # message(c("R is now computing the conditional DEA"))
+          #
+          # # set.seed(seed)
+          #
+          # REF_data_i <- rbind(REF_data[,c(x,y,z_numeric,z_factor)], new_unit)
+          #
+          # # compute the similarity for each obs i
+          # kerz <- npudens(
+          #   bws = bw,
+          #   cykertype = "epanechnikov",
+          #   cxkertype = "epanechnikov",
+          #   tdat = new_unit[,exogenous, drop = FALSE],
+          #   edat = REF_data_i[,exogenous, drop = FALSE])
+          #
+          # similarity_new_unit <- cbind(kerz$dens)
+          #
+          # # consider only the units that perform at least as good as unit i
+          # y_i <- new_unit[, y]
+          # x_i <- new_unit[, x]
+          # Y_Rob <- REF_data_i[, y]
+          # X_Rob <- REF_data_i[, x]
+          # similarity_Rob <- similarity_new_unit
+          #
+          # # mod
+          # # Nueva condición: combinación de filtros input y output (dominancia fuerte)
+          # cond_output <- matrix(TRUE, nrow = nrow(Y_Rob), ncol = k)
+          #
+          # for (l in 1:k) {
+          #   cond_output[, l] <- Y_Rob[, l] >= as.numeric(y_i[l])
+          # }
+          #
+          # cond_input <- matrix(TRUE, nrow = nrow(X_Rob), ncol = s)
+          #
+          # for (l in 1:s) {
+          #   cond_input[, l] <- X_Rob[, l] <= as.numeric(x_i[l])
+          # }
+          #
+          # # Intersección lógica: dominan en todos los outputs y usan menos inputs
+          # combined_filter <- apply(cond_output, 1, all) & apply(cond_input, 1, all)
+          #
+          # # Aplicar el filtro simultáneamente a todas las matrices
+          # similarity_Rob <- similarity_Rob[combined_filter]
+          # X_Rob <- as.data.frame(X_Rob[combined_filter,])
+          # Y_Rob <- as.data.frame(Y_Rob[combined_filter,])
+          # # mod
+          #
+          # n_sample <- nrow(Y_Rob) #(equivalent to nrow(Y_Rob))
+          #
+          # #pick a sample of random unit in the reference set if there are at least 2 units in the ref
+          # if (n_sample < 2) {
+          #   eff <- 0
+          # }
+          # else {
+          #   for (j in 1:B) {
+          #     #select m random units
+          #     m_sample <- sample(n_sample, round(m,0), prob = similarity_Rob, replace = TRUE)
+          #     Y_ref <- as.data.frame(Y_Rob[m_sample,])
+          #     X_ref <- as.data.frame(X_Rob[m_sample,])
+          #
+          #     #compute the DEA for unit i
+          #     DEA_B[j] <- Benchmarking::dea(
+          #       X = new_unit[,x],
+          #       Y = new_unit[,y],
+          #       RTS = RTS,
+          #       ORIENTATION = "in-out",
+          #       DIRECT = TRUE,
+          #       XREF = X_ref,
+          #       YREF = Y_ref)$eff
+          #   }
+          #
+          #   eff <- mean(DEA_B[DEA_B != -Inf & DEA_B != Inf])
+          #   if (alpha != FALSE) {
+          #     ci_low <- stats::quantile(DEA_B[DEA_B != -Inf & DEA_B != Inf], alpha/2)
+          #     ci_up <- stats::quantile(DEA_B[DEA_B != -Inf & DEA_B != Inf], 1-alpha/2)
+          #   }
+          # }
+          #
+          # if(alpha != FALSE) {
+          #   save <- data.frame(eff, ci_low, ci_up)
+          # }
+          # else {
+          #   save <- data.frame(eff)
+          # }
+          #
+          # ##### end conditional DEA
+          #
+          # label <- ifelse(round(save$ci_up, 4) < 0.0001, "efficient", "not_efficient")
+          #
+          # # five, save if everything is correct
+          # if (label == "efficient") {
+          #
+          #   new_unit$class_efficiency <- "efficient"
+          #   save_dataset <- rbind(save_dataset, new_unit)
+          #
+          # } # end check
 
-          # 2 similarity by unit
-          # message(c("R is now computing the conditional DEA"))
+          # compute the DEA for unit i
+          DEA_B <- Benchmarking::dea(
+            X = new_unit[,x],
+            Y = new_unit[,y],
+            RTS = RTS,
+            ORIENTATION = "in-out",
+            DIRECT = TRUE,
+            XREF = data[data$class_efficiency == "efficient",x],
+            YREF = data[data$class_efficiency == "efficient",y])$eff
 
-          # set.seed(seed)
+          # assing efficiency
+          label <- ifelse(round(DEA_B, 4) < 0.0001, "efficient", "not_efficient")
 
-          REF_data_i <- rbind(REF_data[,c(x,y,z_numeric,z_factor)], new_unit)
-
-          # compute the similarity for each obs i
-          kerz <- npudens(
-            bws = bw,
-            cykertype = "epanechnikov",
-            cxkertype = "epanechnikov",
-            tdat = new_unit[,exogenous, drop = FALSE],
-            edat = REF_data_i[,exogenous, drop = FALSE])
-
-          similarity_new_unit <- cbind(kerz$dens)
-
-          # consider only the units that perform at least as good as unit i
-          y_i <- new_unit[, y]
-          x_i <- new_unit[, x]
-          Y_Rob <- REF_data_i[, y]
-          X_Rob <- REF_data_i[, x]
-          similarity_Rob <- similarity_new_unit
-
-          # mod
-          # Nueva condición: combinación de filtros input y output (dominancia fuerte)
-          cond_output <- matrix(TRUE, nrow = nrow(Y_Rob), ncol = k)
-
-          for (l in 1:k) {
-            cond_output[, l] <- Y_Rob[, l] >= as.numeric(y_i[l])
-          }
-
-          cond_input <- matrix(TRUE, nrow = nrow(X_Rob), ncol = s)
-
-          for (l in 1:s) {
-            cond_input[, l] <- X_Rob[, l] <= as.numeric(x_i[l])
-          }
-
-          # Intersección lógica: dominan en todos los outputs y usan menos inputs
-          combined_filter <- apply(cond_output, 1, all) & apply(cond_input, 1, all)
-
-          # Aplicar el filtro simultáneamente a todas las matrices
-          similarity_Rob <- similarity_Rob[combined_filter]
-          X_Rob <- as.data.frame(X_Rob[combined_filter,])
-          Y_Rob <- as.data.frame(Y_Rob[combined_filter,])
-          # mod
-
-          n_sample <- nrow(Y_Rob) #(equivalent to nrow(Y_Rob))
-
-          #pick a sample of random unit in the reference set if there are at least 2 units in the ref
-          if (n_sample < 2) {
-            eff <- 0
-          }
-          else {
-            for (j in 1:B) {
-              #select m random units
-              m_sample <- sample(n_sample, round(m,0), prob = similarity_Rob, replace = TRUE)
-              Y_ref <- as.data.frame(Y_Rob[m_sample,])
-              X_ref <- as.data.frame(X_Rob[m_sample,])
-
-              #compute the DEA for unit i
-              DEA_B[j] <- Benchmarking::dea(
-                X = new_unit[,x],
-                Y = new_unit[,y],
-                RTS = RTS,
-                ORIENTATION = "in-out",
-                DIRECT = TRUE,
-                XREF = X_ref,
-                YREF = Y_ref)$eff
-            }
-
-            eff <- mean(DEA_B[DEA_B != -Inf & DEA_B != Inf])
-            if (alpha != FALSE) {
-              ci_low <- stats::quantile(DEA_B[DEA_B != -Inf & DEA_B != Inf], alpha/2)
-              ci_up <- stats::quantile(DEA_B[DEA_B != -Inf & DEA_B != Inf], 1-alpha/2)
-            }
-          }
-
-          if(alpha != FALSE) {
-            save <- data.frame(eff, ci_low, ci_up)
-          }
-          else {
-            save <- data.frame(eff)
-          }
-
-          ##### end conditional DEA
-
-          label <- ifelse(round(save$ci_up, 4) < 0.0001, "efficient", "not_efficient")
-
-          # five, save if everything is correct
+          # save if the DMU is not_efficient
           if (label == "efficient") {
 
             new_unit$class_efficiency <- "efficient"
