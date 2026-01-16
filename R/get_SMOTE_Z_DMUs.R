@@ -189,9 +189,9 @@ get_SMOTE_Z_DMUs <- function (
 
     iter <- 0
 
-    if (nrow(data) == 161) {
-      browser()
-    }
+    # if (nrow(data) == 161) {
+    #   browser()
+    # }
 
     if (sense_balance == "not_efficient") {
 
@@ -215,7 +215,7 @@ get_SMOTE_Z_DMUs <- function (
 
           iter_0 <- iter_0 + 1
 
-          if (iter_0 >= 50) browser("No pude encontrar combinación fuera de facets en 50 intentos")
+          # if (iter_0 >= 50) browser("No pude encontrar combinación fuera de facets en 50 intentos")
           random_convex <- sample(idx_eff, size = length_facets, replace = FALSE)
           # random_convex <- facets[random_convex,]
           next_sample <- FALSE
