@@ -260,14 +260,21 @@ get_SMOTE_Z_DMUs <- function (
         new_unit <- cbind(new_unit, current_z_factor)
 
         # compute the DEA for unit i
-        DEA_B <- Benchmarking::dea(
-        X = new_unit[,x],
-        Y = new_unit[,y],
-        RTS = RTS,
-        ORIENTATION = "in-out",
-        DIRECT = TRUE,
-        XREF = data[data$class_efficiency == "efficient",x],
-        YREF = data[data$class_efficiency == "efficient",y])$eff
+        # DEA_B <- Benchmarking::dea(
+        # X = new_unit[,x],
+        # Y = new_unit[,y],
+        # RTS = RTS,
+        # ORIENTATION = "in-out",
+        # DIRECT = TRUE,
+        # XREF = data[data$class_efficiency == "efficient",x],
+        # YREF = data[data$class_efficiency == "efficient",y])$eff
+        DEA_B <- dea.add(
+          X = new_unit[,x],
+          Y = new_unit[,y],
+          XREF = data[data$class_efficiency == "efficient",x],
+          YREF = data[data$class_efficiency == "efficient",y],
+          RTS = RTS
+        )[["sum"]]
 
         # ###### DEA conditional
         #
@@ -631,14 +638,21 @@ get_SMOTE_Z_DMUs <- function (
           # } # end check
 
           # compute the DEA for unit i
-          DEA_B <- Benchmarking::dea(
+          # DEA_B <- Benchmarking::dea(
+          #   X = new_unit[,x],
+          #   Y = new_unit[,y],
+          #   RTS = RTS,
+          #   ORIENTATION = "in-out",
+          #   DIRECT = TRUE,
+          #   XREF = data[data$class_efficiency == "efficient",x],
+          #   YREF = data[data$class_efficiency == "efficient",y])$eff
+          DEA_B <- dea.add(
             X = new_unit[,x],
             Y = new_unit[,y],
-            RTS = RTS,
-            ORIENTATION = "in-out",
-            DIRECT = TRUE,
             XREF = data[data$class_efficiency == "efficient",x],
-            YREF = data[data$class_efficiency == "efficient",y])$eff
+            YREF = data[data$class_efficiency == "efficient",y],
+            RTS = RTS
+          )[["sum"]]
 
           # assing efficiency
           label <- ifelse(round(DEA_B, 4) < 0.0001, "efficient", "not_efficient")
