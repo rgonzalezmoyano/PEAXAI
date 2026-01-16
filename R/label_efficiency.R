@@ -184,15 +184,24 @@ label_efficiency <- function (
           Y_ref <- as.data.frame(Y_Rob[m_sample,])
           X_ref <- as.data.frame(X_Rob[m_sample,])
 
-          #compute the DEA for unit i
-          DEA_B[j] <- Benchmarking::dea(
-            X = data[i,x],
-            Y = data[i,y],
-            RTS = RTS,
-            ORIENTATION = "in-out",
-            DIRECT = TRUE,
-            XREF = X_ref,
-            YREF = Y_ref)$eff
+          # compute the DEA for unit i
+          # DEA_B[j] <- Benchmarking::dea(
+          #   X = data[i,x],
+          #   Y = data[i,y],
+          #   RTS = RTS,
+          #   ORIENTATION = "in-out",
+          #   DIRECT = TRUE,
+          #   XREF = X_ref,
+          #   YREF = Y_ref)$eff
+
+          DEA_B[j] <- dea.add(
+            X = as.matrix(data[i,x]),
+            Y = as.matrix(data[i,y]),
+            XREF = as.matrix(REF[,x]),
+            YREF = as.matrix(REF[,y]),
+            RTS = RTS
+          )[["sum"]]
+
         }
 
         eff[i] <- mean(DEA_B[DEA_B != -Inf & DEA_B != Inf])
