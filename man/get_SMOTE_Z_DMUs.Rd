@@ -28,6 +28,10 @@ get_SMOTE_Z_DMUs(
 
 \item{y}{Column indexes of the output variables in the \code{data}.}
 
+\item{z_numeric}{Column indexes of the continuous environment variables (z) in the \code{data}.}
+
+\item{z_factor}{Column indexes of the factor environment variables (z) in the \code{data}.}
+
 \item{RTS}{Text string or number defining the underlying DEA technology /
 returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 \describe{
@@ -40,6 +44,8 @@ returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 }}
 
 \item{balance_data}{A numeric vector indicating the different levels of balance required (e.g., c(0.1, 0.45, 0.6)).}
+
+\item{bandwidth}{the bandwidth parameters for the unconditional kernel density estimator used in the conditional DEA framework. It is typically obtained using \code{\link[np]{npudensbw}} and supports mixed data types, including continuous variables and discrete unordered or ordered factors. Bandwidths can be selected using normal reference rules, likelihood cross-validation, or least-squares cross-validation following Li and Racine (2003). If \code{NULL}, the bandwidth is estimated internally.}
 
 \item{seed}{Integer. Seed for reproducibility.}
 }

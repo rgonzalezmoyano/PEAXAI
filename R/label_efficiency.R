@@ -26,7 +26,7 @@
 #'     \item{\code{4} / \code{"irs"}}{Increasing returns to scale (up-scaling only, convexity + free disposability).}
 #'     \item{\code{5} / \code{"add"}}{Additivity (integer up/down scaling) with free disposability.}
 #'   }
-#' @param bandwidth
+#' @param bandwidth the bandwidth parameters for the unconditional kernel density estimator used in the conditional DEA framework. It is typically obtained using \code{\link[np]{npudensbw}} and supports mixed data types, including continuous variables and discrete unordered or ordered factors. Bandwidths can be selected using normal reference rules, likelihood cross-validation, or least-squares cross-validation following Li and Racine (2003). If \code{NULL}, the bandwidth is estimated internally.
 #' @param seed  Integer. Seed for reproducibility.
 #'
 #' @details

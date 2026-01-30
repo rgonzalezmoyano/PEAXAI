@@ -9,8 +9,8 @@
 #' @param facets A \code{list} where each element represents a subgroup containing index combinations that generate efficient units.
 #' @param x Column indexes of the input variables in the \code{data}.
 #' @param y Column indexes of the output variables in the \code{data}.
-#' @param z_numeric
-#' @param z_factor
+#' @param z_numeric Column indexes of the continuous environment variables (z) in the \code{data}.
+#' @param z_factor Column indexes of the factor environment variables (z) in the \code{data}.
 #' @param RTS Text string or number defining the underlying DEA technology /
 #'   returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 #'   \describe{
@@ -22,7 +22,7 @@
 #'     \item{\code{5} / \code{"add"}}{Additivity (scaling up and down, but only with integers), and free disposability.}
 #'   }
 #' @param balance_data A numeric vector indicating the different levels of balance required (e.g., c(0.1, 0.45, 0.6)).
-#' @param bandwidth
+#' @param bandwidth the bandwidth parameters for the unconditional kernel density estimator used in the conditional DEA framework. It is typically obtained using \code{\link[np]{npudensbw}} and supports mixed data types, including continuous variables and discrete unordered or ordered factors. Bandwidths can be selected using normal reference rules, likelihood cross-validation, or least-squares cross-validation following Li and Racine (2003). If \code{NULL}, the bandwidth is estimated internally.
 #' @param seed  Integer. Seed for reproducibility.
 #'
 #' @importFrom dplyr anti_join
