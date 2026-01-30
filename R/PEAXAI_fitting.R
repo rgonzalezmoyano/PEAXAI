@@ -263,7 +263,7 @@ PEAXAI_fitting <- function (
     # split data
     valid_data <- data[valid_index, c(x,y)]
     train_data <- data[-valid_index, c(x,y)]
-
+browser()
     # label DMUs by technology observed in train
     valid_data <- label_efficiency(
       data = valid_data,

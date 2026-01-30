@@ -52,24 +52,33 @@ convex_facets <- function (
   # --------------------------------------------------------------------------
   # Determine the efficient combinations by Additive DEA ---------------------
   # --------------------------------------------------------------------------
-  datadea <- make_deadata(
-    data,
-    inputs = x,
-    outputs = y
-  )
 
-  eff_convex_list <- maximal_friends(
-    datadea = datadea,
-    rts = RTS,
-    dmu_ref = which(data$class_efficiency == "efficient"))
+  if (length(which(data$class_efficiency == "efficient")) == 0) {
 
-  long <- lengths(eff_convex_list)
-  max_long <- max(long)
+    results_convx <- NA
 
-  list_max_facets <- eff_convex_list[long == max_long]
+  } else {
 
-  results_convx <- as.data.frame(do.call(rbind, list_max_facets))
-  results_convx <- as.matrix(results_convx)
+    datadea <- make_deadata(
+      data,
+      inputs = x,
+      outputs = y
+    )
+
+    eff_convex_list <- maximal_friends(
+      datadea = datadea,
+      rts = RTS,
+      dmu_ref = which(data$class_efficiency == "efficient"))
+
+    long <- lengths(eff_convex_list)
+    max_long <- max(long)
+
+    list_max_facets <- eff_convex_list[long == max_long]
+
+    results_convx <- as.data.frame(do.call(rbind, list_max_facets))
+    results_convx <- as.matrix(results_convx)
+
+  }
 
   return(results_convx)
 

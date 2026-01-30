@@ -45,6 +45,9 @@ get_SMOTE_Z_DMUs <- function (
   # reproducibility.
   set.seed(seed)
 
+  # case 1 DMU is a facet
+  facet_length <- length(facets)
+
   # we need to determine, for each balance level, the number of synthetic DMUs to create
   for (balance in balance_data) {
 
@@ -57,7 +60,7 @@ get_SMOTE_Z_DMUs <- function (
     names(save_dataset) <- names(copy_data)
 
     # check if it is possible to balance
-    if(nrow(facets) == 0) {
+    if(all(is.na(facets)) | facet_length == 1) {
       warning("No facets found; could not apply class balancing.")
 
       save_dataset <- rbind(save_dataset, data)

@@ -205,19 +205,29 @@ SMOTE_Z_data <- function (
         RTS = RTS
       )
 
-      balance_datasets_i <- get_SMOTE_Z_DMUs(
-        data = data_i,
-        REF_data = data[,  setdiff(names(data_i), "group_similarity")],
-        facets = facets,
-        x = x,
-        y = y,
-        z_numeric = z_numeric,
-        z_factor = z_factor,
-        alpha = alpha,
-        balance_data = balance_data,
-        bandwidth = bandwidth,
-        seed = seed
-      )
+      if (nrow(facets) == 0) {
+        balance_datasets_i <- vector("list", length = length(balance_data))
+        names(balance_datasets_i) <- balance_data
+
+        balance_datasets_i[] <- list(data_i)
+
+      } else {
+
+        balance_datasets_i <- get_SMOTE_Z_DMUs(
+          data = data_i,
+          REF_data = data[,  setdiff(names(data_i), "group_similarity")],
+          facets = facets,
+          x = x,
+          y = y,
+          z_numeric = z_numeric,
+          z_factor = z_factor,
+          alpha = alpha,
+          balance_data = balance_data,
+          bandwidth = bandwidth,
+          seed = seed
+        )
+
+      }
 
     } else {
 
