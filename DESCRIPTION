@@ -1,6 +1,6 @@
 Package: PEAXAI
 Title: Probabilistic Efficiency Analysis Using Explainable Artificial Intelligence
-Version: 1.0.0
+Version: 1.0.1
 Authors@R:
   c(
     person(given = "Ricardo",
