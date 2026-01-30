@@ -2,6 +2,7 @@
 
 export(PEAXAI_fitting)
 export(PEAXAI_global_importance)
+export(PEAXAI_local_importance)
 export(PEAXAI_peer)
 export(PEAXAI_predict)
 export(PEAXAI_ranking)

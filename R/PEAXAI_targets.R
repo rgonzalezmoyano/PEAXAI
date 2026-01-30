@@ -116,11 +116,11 @@ PEAXAI_targets <- function (
     n_expand, n_grid, max_y = 2, min_x = 1
 ) {
 
-  validate_parametes_PEAXAI_targets(
-    data, x, y, final_model,
-    efficiency_thresholds, directional_vector,
-    n_expand, n_grid, max_y, min_x
-  )
+  # validate_parametes_PEAXAI_targets(
+  #   data, x, y, final_model,
+  #   efficiency_thresholds, directional_vector,
+  #   n_expand, n_grid, max_y, min_x
+  # )
 
   data <- as.data.frame(data)
 
@@ -144,17 +144,39 @@ PEAXAI_targets <- function (
   # ----------------------------------------------------------------------------
   if (directional_vector[["scope"]] == "global") {
 
-    # relative importance
-    score_imp_x <- as.numeric(directional_vector[["relative_importance"]][x])
-    score_imp_y <- as.numeric(directional_vector[["relative_importance"]][y])
+    # # relative importance
+    # score_imp_x <- as.numeric(directional_vector[["relative_importance"]][x])
+    # score_imp_y <- as.numeric(directional_vector[["relative_importance"]][y])
 
     # baseline
     if (directional_vector[["baseline"]] == "mean") {
 
-      baseline_x <- as.data.frame(t(apply(as.matrix(data[,x]), 2, mean)))
-      names(baseline_x) <- names_data[x]
-      baseline_y <- as.data.frame(t(apply(as.matrix(data[,y]), 2, mean)))
-      names(baseline_y) <- names_data[y]
+      # new
+      L2_nrom_mean <- sqrt(sum(colMeans(data[, c(x,y)])^2))
+
+      # normalize
+      v <- colMeans(data[, c(x,y)])
+
+      v_w <- v * directional_vector[["relative_importance"]]
+
+      # noralize
+      L2_nrom_vector <- sqrt(sum(v_w[, c(x,y)]^2))
+      v_final <- (v_w / L2_nrom_vector) * L2_nrom_mean
+
+      # directional vector
+      vector_gx <- as.data.frame(t(v_final[,x]))
+      names(vector_gx) <- names_data[x]
+      vector_gx <- -vector_gx
+      vector_gy <- as.data.frame(t(v_final[,y]))
+      names(vector_gy) <- names_data[y]
+      # end new
+
+      # baseline_x <- vector_gx
+      # baseline_y <- vector_gy
+      # baseline_x <- as.data.frame(t(apply(as.matrix(data[,x]), 2, mean)))
+      # names(baseline_x) <- names_data[x]
+      # baseline_y <- as.data.frame(t(apply(as.matrix(data[,y]), 2, mean)))
+      # names(baseline_y) <- names_data[y]
 
     } else if (directional_vector[["baseline"]] == "median") {
 
@@ -179,18 +201,122 @@ PEAXAI_targets <- function (
 
     }
 
-    # directional vector
-    vector_gx <- as.data.frame(-(score_imp_x * baseline_x))
-    names(vector_gx) <- names_data[x]
+    # # directional vector
+    # vector_gx <- as.data.frame(-(score_imp_x * baseline_x))
+    # names(vector_gx) <- names_data[x]
+    #
+    # vector_gy <- as.data.frame(score_imp_y * baseline_y)
+    # names(vector_gy) <- names_data[y]
 
-    vector_gy <- as.data.frame(score_imp_y * baseline_y)
-    names(vector_gy) <- names_data[y]
+  } else {
 
-  }
+    # # relative importance
+    # score_imp_x <- directional_vector[["relative_importance"]][x]
+    # score_imp_y <- directional_vector[["relative_importance"]][y]
+    #
+    #
+    # # baseline
+    # if (directional_vector[["baseline"]] == "mean") {
+    #
+    #   baseline_x <- as.data.frame(t(apply(as.matrix(data[,x]), 2, mean)))
+    #   names(baseline_x) <- names_data[x]
+    #   baseline_y <- as.data.frame(t(apply(as.matrix(data[,y]), 2, mean)))
+    #   names(baseline_y) <- names_data[y]
+    #
+    # } else if (directional_vector[["baseline"]] == "median") {
+    #
+    #   baseline_x <- as.data.frame(t(apply(as.matrix(data[,x]), 2, median)))
+    #   names(baseline_x) <- names_data[x]
+    #   baseline_y <- as.data.frame(t(apply(as.matrix(data[,y]), 2, median)))
+    #   names(baseline_y) <- names_data[y]
+    #
+    # } else if (directional_vector[["baseline"]] == "self") {
+    #
+    #   baseline_x <- (data[,x])
+    #   names(baseline_x) <- names_data[x]
+    #   baseline_y <- (data[,y])
+    #   names(baseline_y) <- names_data[y]
+    #
+    # } else if (directional_vector[["baseline"]] == "ones") {
+    #
+    #   baseline_x <- as.data.frame(t(rep(1, NCOL(data[,x]))))
+    #   names(baseline_x) <- names_data[x]
+    #   baseline_y <- as.data.frame(t(rep(1, NCOL(data[,y]))))
+    #   names(baseline_y) <- names_data[y]
+    #
+    # }
+
+    # norm
+    if (directional_vector[["baseline"]] == "mean") {
+
+      L2_nrom_mean <- sqrt(sum(colMeans(data[, c(x,y)])^2))
+
+      # normalize
+      v <- (data[, c(x,y)]/sqrt(rowSums(data[, c(x,y)]^2)))*L2_nrom_mean
+
+      v_w <- v * directional_vector[["relative_importance"]]
+
+      # normalize
+      L2_nrom_vector <- sqrt(rowSums(v_w[, c(x,y)]^2))
+      v_final <- (v_w / L2_nrom_vector) * L2_nrom_mean
+
+      # directional vector
+      vector_gx <- as.data.frame(v_final[,x])
+      names(vector_gx) <- names_data[x]
+      vector_gy <- as.data.frame(v_final[,y])
+      names(vector_gy) <- names_data[y]
+
+    } else if (directional_vector[["baseline"]] == "self") {
+
+      L2_nrom_self <- sqrt(sum(data[, c(x,y)]^2))
+
+      # normalize
+      w <- directional_vector[["relative_importance"]]
+      w <- w * data[, c(x,y)]
+      L2_nrom_w <- sqrt(rowSums(w^2))
+
+      w_nrom <- w/L2_nrom_w
+      sqrt(rowSums(w_nrom^2))
+
+      v_final <- w_nrom*L2_nrom_self
+
+      # directional vector
+      vector_gx <- as.data.frame(v_final[,x])
+      names(vector_gx) <- names_data[x]
+      vector_gy <- as.data.frame(v_final[,y])
+      names(vector_gy) <- names_data[y]
+
+    } else if (directional_vector[["baseline"]] == "ones") {
+
+        L2_nrom_one <- sqrt(sum(rep(1, length(c(x,y)))^2))
+
+        # normalize
+        w <- directional_vector[["relative_importance"]]
+        L2_nrom_w <- sqrt(rowSums(directional_vector[["relative_importance"]]^2))
+
+        w_nrom <- w/L2_nrom_w
+        sqrt(rowSums(w_nrom^2))
+
+        v_final <- w_nrom*L2_nrom_one
+
+        # directional vector
+        vector_gx <- as.data.frame(v_final[,x])
+        names(vector_gx) <- names_data[x]
+
+        vector_gy <- as.data.frame(v_final[,y])
+        names(vector_gy) <- names_data[y]
+
+    }
+
+    vector_gx <- -vector_gx
+
+  } # end local directional vector
+
 
   # ----------------------------------------------------------------------------
   # Determining the max beta  --------------------------------------------------
   # ----------------------------------------------------------------------------
+
   # find the first approximation of max beta for max(efficiency_thresholds)
   find_beta_maxmin <- find_beta_maxmin(
     data = data,
@@ -271,7 +397,7 @@ PEAXAI_targets <- function (
         # Nombrar las columnas como en data original
         names(changes) <- names(data)
 
-        if(directional_vector[["baseline"]] != "self") {
+        if(directional_vector[["baseline"]] != "self" & directional_vector[["scope"]] != "local") {
 
           change_x <- matrix(
             data = rep(as.numeric(vector_gx), each = nrow(changes)),
