@@ -1,6 +1,6 @@
 Package: PEAXAI
 Title: Probabilistic Efficiency Analysis Using Explainable Artificial Intelligence
-Version: 1.0.0
+Version: 1.0.1
 Authors@R:
   c(
     person(given = "Ricardo",
@@ -48,16 +48,17 @@ Depends:
 Imports:
   Benchmarking,
   caret,
-  deaR,
   dplyr,
   fastshap,
   iml,
+  isotone,
+  lpSolve,
+  np,
   PRROC,
   pROC,
   rminer,
-  stats,
   rms,
-  isotone
+  stats
 Suggests:
   ggplot2,
   knitr,

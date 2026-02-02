@@ -63,6 +63,8 @@ get_SMOTE_DMUs <- function (
 
       # save
       save_all_datasets_balanced[[as.character(balance)]] <- new_data_completed
+      browser()
+      browser()
       next
 
     }
@@ -184,6 +186,7 @@ get_SMOTE_DMUs <- function (
     n_comb <- nrow(data_eff)
 
     if (sense_balance == "not_efficient") {
+      print(sense_balance)
 
       # # number of not efficient units to create, more than it is necessary
       new_create_ineff <- 4 * create_ineff
@@ -194,7 +197,8 @@ get_SMOTE_DMUs <- function (
 
         # first, select a random index and combination
         # number of dimensions
-        n_combinations <- length(facets)
+        n_combinations <- ncol(facets)
+
         random_convex <- sample(idx_eff, size = n_combinations, replace = FALSE)
         selection <- data[unlist(as.vector(random_convex)), c(x,y)]
 
@@ -264,7 +268,7 @@ get_SMOTE_DMUs <- function (
       }
 
     } else {
-
+      print(sense_balance)
       # first, populate the middle point to ensure that all facets are populate
       results_convx <- t(apply(facets, 1, function(indices) {
 
