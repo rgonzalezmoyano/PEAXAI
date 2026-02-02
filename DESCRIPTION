@@ -51,12 +51,14 @@ Imports:
   dplyr,
   fastshap,
   iml,
+  isotone,
+  lpSolve,
+  np,
   PRROC,
   pROC,
   rminer,
-  stats,
   rms,
-  isotone
+  stats
 Suggests:
   ggplot2,
   knitr,
