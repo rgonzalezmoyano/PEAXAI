@@ -213,7 +213,7 @@ SMOTE_Z_data <- function (
 
       } else {
 
-        balance_datasets_i <- get_SMOTE_Z_DMUs(
+        balance_datasets_i <- get_SMOTE_DMUs(
           data = data_i,
           REF_data = data[,  setdiff(names(data_i), "group_similarity")],
           facets = facets,

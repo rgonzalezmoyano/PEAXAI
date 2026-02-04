@@ -276,9 +276,9 @@ targets <- PEAXAI_targets(
   final_model = models[["best_model_fit"]][["nnet"]],
   efficiency_thresholds = efficiency_thresholds,
   directional_vector = directional_vector,
-  n_expand = 0.5,
+  n_expand = 0.25,
   n_grid = 50,
-  max_y = 2,
+  max_y = 1,
   min_x = 1
 )
 ```

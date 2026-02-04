@@ -9,6 +9,8 @@
 #' @param facets A \code{list} where each element represents a subgroup containing index combinations that generate efficient units.
 #' @param x Column indexes of the input variables in the \code{data}.
 #' @param y Column indexes of the output variables in the \code{data}.
+#' @param z_numeric Column indexes of the continuous environment variables (z) in the \code{data}.
+#' @param z_factor Column indexes of the factor environment variables (z) in the \code{data}.
 #' @param RTS Text string or number defining the underlying DEA technology /
 #'   returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 #'   \describe{
@@ -20,6 +22,7 @@
 #'     \item{\code{5} / \code{"add"}}{Additivity (scaling up and down, but only with integers), and free disposability.}
 #'   }
 #' @param balance_data A numeric vector indicating the different levels of balance required (e.g., c(0.1, 0.45, 0.6)).
+#' @param bandwidth the bandwidth parameters for the unconditional kernel density estimator used in the conditional DEA framework. It is typically obtained using \code{\link[np]{npudensbw}} and supports mixed data types, including continuous variables and discrete unordered or ordered factors. Bandwidths can be selected using normal reference rules, likelihood cross-validation, or least-squares cross-validation following Li and Racine (2003). If \code{NULL}, the bandwidth is estimated internally.
 #' @param seed  Integer. Seed for reproducibility.
 #'
 #' @importFrom dplyr anti_join
@@ -29,7 +32,8 @@
 #' with the real and synthetic DMUs, correctly labeled.
 
 get_SMOTE_DMUs <- function (
-    data, facets, x, y, RTS = "vrs", balance_data = NULL, seed
+    data, REF_data, facets, x, y, z_numeric = NULL, z_factor = NULL,
+    RTS = "vrs", alpha = FALSE, balance_data = NULL, bandwidth = NULL, seed
 ) {
 
   # save a copy
@@ -40,6 +44,9 @@ get_SMOTE_DMUs <- function (
 
   # reproducibility.
   set.seed(seed)
+
+  # case 1 DMU is a facet
+  facet_length <- length(facets)
 
   # we need to determine, for each balance level, the number of synthetic DMUs to create
   for (balance in balance_data) {
@@ -53,7 +60,7 @@ get_SMOTE_DMUs <- function (
     names(save_dataset) <- names(copy_data)
 
     # check if it is possible to balance
-    if(nrow(facets) == 0) {
+    if(nrow(facets) == 0 | facet_length == 1) {
       warning("No facets found; could not apply class balancing.")
 
       save_dataset <- rbind(save_dataset, data)
@@ -65,7 +72,6 @@ get_SMOTE_DMUs <- function (
       save_all_datasets_balanced[[as.character(balance)]] <- new_data_completed
       browser()
       browser()
-      next
 
     }
 
@@ -185,10 +191,11 @@ get_SMOTE_DMUs <- function (
 
     n_comb <- nrow(data_eff)
 
-    if (sense_balance == "not_efficient") {
-      print(sense_balance)
+    iter <- 0
 
-      # # number of not efficient units to create, more than it is necessary
+    if (sense_balance == "not_efficient") {
+
+      # number of not efficient units to create, more than it is necessary
       new_create_ineff <- 4 * create_ineff
 
       while (nrow(save_dataset) < new_create_ineff) {
@@ -197,14 +204,52 @@ get_SMOTE_DMUs <- function (
 
         # first, select a random index and combination
         # number of dimensions
-        n_combinations <- ncol(facets)
+        n_combinations <- NROW(facets)
+        length_facets <- NCOL(facets)
 
-        random_convex <- sample(idx_eff, size = n_combinations, replace = FALSE)
-        selection <- data[unlist(as.vector(random_convex)), c(x,y)]
+        ctrl_facet <- TRUE
+
+        iter_0 <- 0
+        while (ctrl_facet == TRUE) {
+
+          iter_0 <- iter_0 + 1
+
+          # if (iter_0 >= 50) browser("No pude encontrar combinación fuera de facets en 50 intentos")
+          random_convex <- sample(idx_eff, size = length_facets, replace = FALSE)
+          # random_convex <- facets[random_convex,]
+          next_sample <- FALSE
+
+          # check not on facet
+          for (facet_i in 1:nrow(facets)) {
+
+            check <- random_convex[order(random_convex)]
+            ref <- facets[facet_i,]
+            ref <- ref[order(ref)]
+
+            if (all(check == ref)) {
+              next_sample <- TRUE
+              break
+            }
+
+          }
+
+         if (next_sample == TRUE) {
+           next
+         } else {
+           ctrl_facet <- FALSE
+         }
+
+        }
+
+        if (is.null(z_numeric)) {
+          selection <- data[unlist(as.vector(random_convex)), c(x,y)]
+        } else {
+          selection <- data[unlist(as.vector(random_convex)), c(x,y, z_numeric)]
+        }
 
         # second, determine random weights by DMU
         # process to generate lambda
-        generate_lambda <- runif(length(c(x,y)), min = 0.01, max = 0.99)
+        generate_lambda <- runif(nrow(selection), min = 0.01, max = 0.99)
 
         normalize_lambda <- generate_lambda/sum(generate_lambda)
 
@@ -212,19 +257,29 @@ get_SMOTE_DMUs <- function (
         new_unit <- colSums(selection * normalize_lambda)
         new_unit <- as.data.frame(t(new_unit))
 
-        # check efficiency
-        check_results_convx <- dea.add(
-          X = as.matrix(new_unit[,x]),
-          Y = as.matrix(new_unit[,y]),
-          XREF = as.matrix(data_eff[,x]),
-          YREF = as.matrix(data_eff[,y]),
+        # paste z_varaibles
+        if (!is.null(z_factor)) {
+          current_z_factor <- unique(data[,z_factor])
+          new_unit <- cbind(new_unit, current_z_factor)
+        }
+
+        # check new_unit
+        DEA_B <- dea.add(
+          X = new_unit[,x],
+          Y = new_unit[,y],
+          XREF = data[data$class_efficiency == "efficient",x],
+          YREF = data[data$class_efficiency == "efficient",y],
           RTS = RTS
-        )[["sum"]] > 0.0001
+        )[["sum"]]
+
+        # assing efficiency
+        label <- ifelse(round(DEA_B, 4) < 0.0001, "efficient", "not_efficient")
 
         # save if the DMU is not_efficient
-        if (check_results_convx == TRUE) {
+        if (label == "not_efficient") {
 
           new_unit$class_efficiency <- "not_efficient"
+          new_unit$score <- round(DEA_B, 4)
           save_dataset <- rbind(save_dataset, new_unit)
 
         } # end check
@@ -232,20 +287,12 @@ get_SMOTE_DMUs <- function (
       } # end while
 
       # order by score in innefficieny DEA
-      check_results_convx <- dea.add(
-        X = as.matrix(save_dataset[,x]),
-        Y = as.matrix(save_dataset[,y]),
-        XREF = as.matrix(data_eff[,x]),
-        YREF = as.matrix(data_eff[,y]),
-        RTS = RTS
-      )[["sum"]]
-
       # make quiantiles
-      q_innef <- quantile(check_results_convx)
+      q_innef <- quantile(save_dataset$score)
 
       # group_by
       quantiles <- cut(
-        check_results_convx,
+        save_dataset$score,
         breaks = q_innef,
         include.lowest = TRUE,
         labels = c("Q1", "Q2", "Q3", "Q4")
@@ -254,7 +301,7 @@ get_SMOTE_DMUs <- function (
       # choose the same sample by quantile
       need_by_quantile <- create_ineff/4
 
-      copy_save_dataset <- save_dataset
+      copy_save_dataset <- save_dataset[, -length(save_dataset)]
       save_dataset <- save_dataset[0,]
 
       # sample of each quantile
@@ -268,12 +315,16 @@ get_SMOTE_DMUs <- function (
       }
 
     } else {
-      print(sense_balance)
+
       # first, populate the middle point to ensure that all facets are populate
       results_convx <- t(apply(facets, 1, function(indices) {
 
         # select row
-        seleccion <- data[unlist(as.vector(indices)), c(x,y)]
+        if (is.null(z_numeric)) {
+          seleccion <- data[unlist(as.vector(indices)), c(x,y)]
+        } else {
+          seleccion <- data[unlist(as.vector(indices)), c(x,y, z_numeric)]
+        }
 
         # calculate
         colSums(seleccion * lambda)
@@ -281,6 +332,12 @@ get_SMOTE_DMUs <- function (
       }))
 
       results_convx <- as.data.frame(results_convx)
+
+      # add factor
+      if (!is.null(z_factor)) {
+        current_z_factor <- unique(data[,z_factor])
+        results_convx <- cbind(results_convx, current_z_factor)
+      }
 
       # too much efficient
       if (nrow(facets) > create_eff) {
@@ -306,7 +363,7 @@ get_SMOTE_DMUs <- function (
           # first, select a random index and combination
           idx_save <- sample(nrow(facets), size = 1)
           dmus_by_facet <- facets[idx_save,]
-          selection <- data[unlist(as.vector(dmus_by_facet)), c(x,y)]
+          selection <- data[unlist(as.vector(dmus_by_facet)), c(x,y, z_numeric)]
 
           # second, determine random weights by DMU
           # process to generate lambda
@@ -318,17 +375,25 @@ get_SMOTE_DMUs <- function (
           new_unit <- colSums(selection * normalize_lambda)
           new_unit <- as.data.frame(t(new_unit))
 
-          # fourth, check if the new DMU is efficient
-          check_results_convx <- dea.add(
-            X = as.matrix(new_unit[,x]),
-            Y = as.matrix(new_unit[,y]),
-            XREF = as.matrix(data_eff[,x]),
-            YREF = as.matrix(data_eff[,y]),
-            RTS = RTS
-          )[["sum"]] < 0.0001
+          # paste z_factor
+          if (!is.null(z_factor)) {
+            new_unit <- cbind(new_unit, current_z_factor)
+          }
 
-          # five, save if everything is correct
-          if (check_results_convx == TRUE) {
+          # check new_unit
+          DEA_B <- dea.add(
+            X = new_unit[,x],
+            Y = new_unit[,y],
+            XREF = data[data$class_efficiency == "efficient",x],
+            YREF = data[data$class_efficiency == "efficient",y],
+            RTS = RTS
+          )[["sum"]]
+
+          # assing efficiency
+          label <- ifelse(round(DEA_B, 4) < 0.0001, "efficient", "not_efficient")
+
+          # save if the DMU is not_efficient
+          if (label == "efficient") {
 
             new_unit$class_efficiency <- "efficient"
             save_dataset <- rbind(save_dataset, new_unit)

@@ -16,6 +16,7 @@
 #'     \item{\code{5} / \code{"add"}}{Additivity (scaling up and down, but only with integers), and free disposability.}
 #'   }
 #'
+#' @importFrom deaR make_deadata maximal_friends
 #'
 #' @return It returns a \code{data.frame} with the newly created set of DMUs incorporated.
 

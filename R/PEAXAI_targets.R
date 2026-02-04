@@ -163,12 +163,11 @@ PEAXAI_targets <- function (
       L2_nrom_vector <- sqrt(sum(v_w[, c(x,y)]^2))
       v_final <- (v_w / L2_nrom_vector) * L2_nrom_mean
 
-      # directional vector
-      vector_gx <- as.data.frame(t(v_final[,x]))
-      names(vector_gx) <- names_data[x]
-      vector_gx <- -vector_gx
-      vector_gy <- as.data.frame(t(v_final[,y]))
-      names(vector_gy) <- names_data[y]
+      # vector_gx <- as.data.frame(v_final[,x])
+      # names(vector_gx) <- names_data[x]
+      # vector_gx <- -vector_gx
+      # vector_gy <- as.data.frame(v_final[,y])
+      # names(vector_gy) <- names_data[y]
       # end new
 
       # baseline_x <- vector_gx
@@ -179,21 +178,41 @@ PEAXAI_targets <- function (
       # names(baseline_y) <- names_data[y]
 
     } else if (directional_vector[["baseline"]] == "median") {
+stop("Not available.")
+      # new
+      L2_nrom_mean <- sqrt(sum(colMeans(data[, c(x,y)])^2))
 
-      baseline_x <- as.data.frame(t(apply(as.matrix(data[,x]), 2, median)))
-      names(baseline_x) <- names_data[x]
-      baseline_y <- as.data.frame(t(apply(as.matrix(data[,y]), 2, median)))
-      names(baseline_y) <- names_data[y]
+      # normalize
+      v <- colMeans(data[, c(x,y)])
+
+      v_w <- v * directional_vector[["relative_importance"]]
+
+      # noralize
+      L2_nrom_vector <- sqrt(sum(v_w[, c(x,y)]^2))
+      v_final <- (v_w / L2_nrom_vector) * L2_nrom_mean
+
+      # # directional vector
+      # vector_gx <- as.data.frame(t(v_final[,x]))
+      # names(vector_gx) <- names_data[x]
+      # vector_gx <- -vector_gx
+      # vector_gy <- as.data.frame(t(v_final[,y]))
+      # names(vector_gy) <- names_data[y]
+      # end new
+
+      # baseline_x <- as.data.frame(t(apply(as.matrix(data[,x]), 2, median)))
+      # names(baseline_x) <- names_data[x]
+      # baseline_y <- as.data.frame(t(apply(as.matrix(data[,y]), 2, median)))
+      # names(baseline_y) <- names_data[y]
 
     } else if (directional_vector[["baseline"]] == "self") {
-
+      stop("Not available.")
       baseline_x <- (data[,x])
       names(baseline_x) <- names_data[x]
       baseline_y <- (data[,y])
       names(baseline_y) <- names_data[y]
 
     } else if (directional_vector[["baseline"]] == "ones") {
-
+      stop("Not available.")
       baseline_x <- as.data.frame(t(rep(1, NCOL(data[,x]))))
       names(baseline_x) <- names_data[x]
       baseline_y <- as.data.frame(t(rep(1, NCOL(data[,y]))))
@@ -208,43 +227,19 @@ PEAXAI_targets <- function (
     # vector_gy <- as.data.frame(score_imp_y * baseline_y)
     # names(vector_gy) <- names_data[y]
 
-  } else {
+    # directional vector
+    if (nrow(v_final) > 1) {
+      v_final <- t(v_final)
+    }
 
-    # # relative importance
-    # score_imp_x <- directional_vector[["relative_importance"]][x]
-    # score_imp_y <- directional_vector[["relative_importance"]][y]
-    #
-    #
-    # # baseline
-    # if (directional_vector[["baseline"]] == "mean") {
-    #
-    #   baseline_x <- as.data.frame(t(apply(as.matrix(data[,x]), 2, mean)))
-    #   names(baseline_x) <- names_data[x]
-    #   baseline_y <- as.data.frame(t(apply(as.matrix(data[,y]), 2, mean)))
-    #   names(baseline_y) <- names_data[y]
-    #
-    # } else if (directional_vector[["baseline"]] == "median") {
-    #
-    #   baseline_x <- as.data.frame(t(apply(as.matrix(data[,x]), 2, median)))
-    #   names(baseline_x) <- names_data[x]
-    #   baseline_y <- as.data.frame(t(apply(as.matrix(data[,y]), 2, median)))
-    #   names(baseline_y) <- names_data[y]
-    #
-    # } else if (directional_vector[["baseline"]] == "self") {
-    #
-    #   baseline_x <- (data[,x])
-    #   names(baseline_x) <- names_data[x]
-    #   baseline_y <- (data[,y])
-    #   names(baseline_y) <- names_data[y]
-    #
-    # } else if (directional_vector[["baseline"]] == "ones") {
-    #
-    #   baseline_x <- as.data.frame(t(rep(1, NCOL(data[,x]))))
-    #   names(baseline_x) <- names_data[x]
-    #   baseline_y <- as.data.frame(t(rep(1, NCOL(data[,y]))))
-    #   names(baseline_y) <- names_data[y]
-    #
-    # }
+    # directional vector
+    vector_gx <- as.data.frame(t(v_final[,x]))
+    names(vector_gx) <- names_data[x]
+    vector_gx <- -vector_gx
+    vector_gy <- as.data.frame(t(v_final[,y]))
+    names(vector_gy) <- names_data[y]
+
+  } else {
 
     # norm
     if (directional_vector[["baseline"]] == "mean") {
@@ -260,11 +255,6 @@ PEAXAI_targets <- function (
       L2_nrom_vector <- sqrt(rowSums(v_w[, c(x,y)]^2))
       v_final <- (v_w / L2_nrom_vector) * L2_nrom_mean
 
-      # directional vector
-      vector_gx <- as.data.frame(v_final[,x])
-      names(vector_gx) <- names_data[x]
-      vector_gy <- as.data.frame(v_final[,y])
-      names(vector_gy) <- names_data[y]
 
     } else if (directional_vector[["baseline"]] == "self") {
 
@@ -280,11 +270,11 @@ PEAXAI_targets <- function (
 
       v_final <- w_nrom*L2_nrom_self
 
-      # directional vector
-      vector_gx <- as.data.frame(v_final[,x])
-      names(vector_gx) <- names_data[x]
-      vector_gy <- as.data.frame(v_final[,y])
-      names(vector_gy) <- names_data[y]
+      # # directional vector
+      # vector_gx <- as.data.frame(v_final[,x])
+      # names(vector_gx) <- names_data[x]
+      # vector_gy <- as.data.frame(v_final[,y])
+      # names(vector_gy) <- names_data[y]
 
     } else if (directional_vector[["baseline"]] == "ones") {
 
@@ -299,16 +289,22 @@ PEAXAI_targets <- function (
 
         v_final <- w_nrom*L2_nrom_one
 
-        # directional vector
-        vector_gx <- as.data.frame(v_final[,x])
-        names(vector_gx) <- names_data[x]
-
-        vector_gy <- as.data.frame(v_final[,y])
-        names(vector_gy) <- names_data[y]
+        # # directional vector
+        # vector_gx <- as.data.frame(v_final[,x])
+        # names(vector_gx) <- names_data[x]
+        #
+        # vector_gy <- as.data.frame(v_final[,y])
+        # names(vector_gy) <- names_data[y]
 
     }
 
+    # directional vector
+    vector_gx <- as.data.frame(v_final[,x])
+    names(vector_gx) <- names_data[x]
     vector_gx <- -vector_gx
+
+    vector_gy <- as.data.frame(v_final[,y])
+    names(vector_gy) <- names_data[y]
 
   } # end local directional vector
 

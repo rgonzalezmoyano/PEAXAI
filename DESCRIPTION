@@ -48,6 +48,7 @@ Depends:
 Imports:
   Benchmarking,
   caret,
+  deaR,
   dplyr,
   fastshap,
   iml,
