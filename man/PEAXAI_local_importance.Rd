@@ -11,7 +11,8 @@ PEAXAI_local_importance(
   final_model,
   background = "train",
   target = "train",
-  importance_method
+  importance_method,
+  seed = 314
 )
 }
 \arguments{
@@ -43,6 +44,8 @@ Dataset on which \strong{local} importance is computed (one explanation per obse
 \item{\code{nsim}}{(SHAP) Number of Monte Carlo samples for \code{fastshap::explain}.}
 \item{\code{n.repetitions}}{(PI) Number of perturbation/permutation draws per feature and observation.}
 }}
+
+\item{seed}{Integer. Seed for reproducibility.}
 }
 \value{
 A numeric matrix (or data.frame) with one row per target observation and one

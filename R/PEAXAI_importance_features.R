@@ -36,11 +36,14 @@
 #'     \item{\code{n.repetitions}}{(PI) Number of permutations per feature for \code{iml::FeatureImp}.}
 #'   }
 #'
+#' @param seed  Integer. Seed for reproducibility.
+#'
 #' @details
 #' Internally, the function builds background/target sets with \code{xai_prepare_sets()}.
 #' For \code{glm} models, the positive class is assumed to be the **second level**
 #' (\code{"efficient"}) and probabilities are extracted with \code{type = "response"}.
 #' For other models (e.g., \pkg{caret}), \code{predict(type = "prob")[, "efficient"]} is used.
+#'
 #'
 #' @return A named numeric vector (or 1-row data.frame) of normalized importances,
 #'   with names matching the predictor columns; the values sum to 1.
@@ -108,7 +111,7 @@
 
 PEAXAI_global_importance <- function(
     data, x, y, final_model, background = "train",
-    target = "train", importance_method
+    target = "train", importance_method, seed = 314
     ) {
 
   validate_parametes_PEAXAI_global_importance(
@@ -120,6 +123,9 @@ PEAXAI_global_importance <- function(
   data <- data[, c(x,y)]
   x <- 1:(ncol(data) - length(y))
   y <- (length(x) + 1):ncol(data)
+
+  # reproducibility
+  set.seed(seed)
 
   # ----------------------------------------------------------------------------
   # detecting importance variables ---------------------------------------------
@@ -372,6 +378,8 @@ PEAXAI_global_importance <- function(
 #'     \item{\code{n.repetitions}}{(PI) Number of perturbation/permutation draws per feature and observation.}
 #'   }
 #'
+#' @param seed  Integer. Seed for reproducibility.
+#'
 #' @details
 #' Internally, the function builds background/target sets with \code{xai_prepare_sets()}.
 #' Local explanations are produced for the predicted probability \eqn{\hat{p}_i = P(\text{efficient}\mid x_i)}.
@@ -456,7 +464,7 @@ PEAXAI_global_importance <- function(
 
 PEAXAI_local_importance <- function(
     data, x, y, final_model, background = "train",
-    target = "train", importance_method
+    target = "train", importance_method, seed = 314
 ) {
 
   # validate_parametes_PEAXAI_global_importance(
@@ -468,6 +476,9 @@ PEAXAI_local_importance <- function(
   data <- data[, c(x,y)]
   x <- 1:(ncol(data) - length(y))
   y <- (length(x) + 1):ncol(data)
+
+  # reproducibility
+  set.seed(seed)
 
   # ----------------------------------------------------------------------------
   # detecting importance variables ---------------------------------------------

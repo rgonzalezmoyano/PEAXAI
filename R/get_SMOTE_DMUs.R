@@ -70,9 +70,7 @@ get_SMOTE_DMUs <- function (
 
       # save
       save_all_datasets_balanced[[as.character(balance)]] <- new_data_completed
-      browser()
-      browser()
-
+      next
     }
 
     # --------------------------------------------------------------------------
@@ -189,7 +187,7 @@ get_SMOTE_DMUs <- function (
 
     lambda <- rep(prop_imp, ncol(facets))
 
-    n_comb <- nrow(data_eff)
+    # n_comb <- nrow(data_eff)
 
     iter <- 0
 
@@ -265,10 +263,10 @@ get_SMOTE_DMUs <- function (
 
         # check new_unit
         DEA_B <- dea.add(
-          X = new_unit[,x],
-          Y = new_unit[,y],
-          XREF = data[data$class_efficiency == "efficient",x],
-          YREF = data[data$class_efficiency == "efficient",y],
+          X = as.matrix(new_unit[,x]),
+          Y = as.matrix(new_unit[,y]),
+          XREF = as.matrix(data[data$class_efficiency == "efficient",x]),
+          YREF = as.matrix(data[data$class_efficiency == "efficient",y]),
           RTS = RTS
         )[["sum"]]
 
@@ -382,10 +380,10 @@ get_SMOTE_DMUs <- function (
 
           # check new_unit
           DEA_B <- dea.add(
-            X = new_unit[,x],
-            Y = new_unit[,y],
-            XREF = data[data$class_efficiency == "efficient",x],
-            YREF = data[data$class_efficiency == "efficient",y],
+            X = as.matrix(new_unit[,x]),
+            Y = as.matrix(new_unit[,y]),
+            XREF = as.matrix(data[data$class_efficiency == "efficient",x]),
+            YREF = as.matrix(data[data$class_efficiency == "efficient",y]),
             RTS = RTS
           )[["sum"]]
 

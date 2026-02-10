@@ -170,11 +170,14 @@ train_PEAXAI <- function (
 
   } else if (method == "rf") {
 
+    mtry <- as.data.frame(parameters[["tuneGrid"]])
+    names(mtry) <- "mtry"
+
     model_fit <- train(
       class_efficiency ~ .,
       data = data,
       method = "rf",
-      tuneGrid = parameters[["tuneGrid"]],
+      tuneGrid = mtry,
       trControl = trControl,
       metric = "Accuracy",
 

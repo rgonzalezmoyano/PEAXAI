@@ -20,7 +20,7 @@ PEAXAI_fitting(
   metric_priority = "Balanced_Accuracy",
   calibration_method = NULL,
   hold_out = NULL,
-  seed = NULL,
+  seed = 314,
   verbose = TRUE
 )
 }

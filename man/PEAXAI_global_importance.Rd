@@ -11,7 +11,8 @@ PEAXAI_global_importance(
   final_model,
   background = "train",
   target = "train",
-  importance_method
+  importance_method,
+  seed = 314
 )
 }
 \arguments{
@@ -43,6 +44,8 @@ Dataset on which importance is computed.}
 \item{\code{nsim}}{(SHAP) Number of Monte Carlo samples for \code{fastshap::explain}.}
 \item{\code{n.repetitions}}{(PI) Number of permutations per feature for \code{iml::FeatureImp}.}
 }}
+
+\item{seed}{Integer. Seed for reproducibility.}
 }
 \value{
 A named numeric vector (or 1-row data.frame) of normalized importances,

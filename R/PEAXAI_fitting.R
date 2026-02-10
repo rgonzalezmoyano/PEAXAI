@@ -106,7 +106,7 @@ PEAXAI_fitting <- function (
     data, x, y, z_numeric = NULL, z_factor = NULL, RTS = "vrs",
     B = NULL, alpha = FALSE, m = NULL, imbalance_rate = NULL,
     trControl, methods, metric_priority = "Balanced_Accuracy",
-    calibration_method = NULL, hold_out = NULL, seed = NULL, verbose = TRUE
+    calibration_method = NULL, hold_out = NULL, seed = 314, verbose = TRUE
     ) {
 
   # ----------------------------------------------------------------------------
@@ -137,11 +137,6 @@ PEAXAI_fitting <- function (
 
   mth_cal <- calibration_method
   alpha <- 0.05
-
-  # seed
-  if (is.null(seed)) {
-    seed <- 314
-  }
 
   # # reorder index 'x' and 'y' in data
   data_x <- data[,c(x), drop = FALSE]
@@ -735,6 +730,10 @@ browser()
                    .names = "{col}SD")
           )
 
+        if (is.numeric(performace_tunGrid)) {
+          performace_tunGrid <- as.data.frame(performace_tunGrid)
+          names(performace_tunGrid) <- names(methods[[method_i]][["tuneGrid"]])
+        }
         performance <- cbind(performace_tunGrid, mean_fold, sd_fold)
 
         performance_train_all_by_method[[method_i]][[balance_i]][[grid_i]] <- performance
@@ -747,6 +746,7 @@ browser()
       # performance_train_all_by_method[[method_i]][[balance_i]] <- performance
       df_imbalance <- as.data.frame(balance_i)
       names(df_imbalance) <- "Imbalance_rate"
+
       if (method_i == "glm") {
 
         performance <- performance[2:ncol(performance)]
@@ -754,6 +754,10 @@ browser()
       } else {
         names_methods_grid <- names(methods[[method_i]][["tuneGrid"]])
         df_parameters <- performance[, names_methods_grid]
+        if (is.vector(df_parameters)) {
+          df_parameters <- as.data.frame(df_parameters)
+          names(df_parameters) <- names_methods_grid
+        }
         names_metrics <- setdiff(names(performance), names_methods_grid)
         df_metrics <- performance[, names_metrics]
         performance <- cbind(df_imbalance, df_parameters, round(df_metrics, 2))

@@ -453,16 +453,60 @@ stop("Not available.")
           my <- as.matrix(matrix_eff[, y, drop = FALSE])
           max_y_possible_vector <- as.numeric(max_y_possible*max_y)
 
-
           # sums how many TRUE lines are violating the restriction
           viol <- rowSums(mx < rep(min_x_possible_vector, each = nrow(mx))) > 0
           idx_viol_x <- which(viol)
           viol <- rowSums(my > rep(max_y_possible_vector, each = nrow(my))) > 0
           idx_viol_y <- which(viol)
 
+          # manifold
+          # domain data
+          manifold <- as.matrix(data[,c(x,y)])
+
+          for (new_point_i in 1:nrow(matrix_eff)) {
+
+            # save index correct
+            viol_daisy <- rep(FALSE, nrow(matrix_eff))
+
+            # daisy() maneja automáticamente variables numéricas y categóricas
+            distances <- daisy(rbind(manifold, matrix_eff[new_point_i,]), metric = "gower")
+
+            # Convertimos a matriz y extraemos la última fila (nuestra distancia con el resto)
+            dist_matrix <- as.matrix(distances)
+            dist_cf <- dist_matrix[nrow(dist_matrix), 1:(nrow(dist_matrix)-1)]
+
+            # El vecino más cercano según Gower
+            min_gower <- min(dist_cf)
+
+            if (min_gower > 0.15) {
+              viol_daisy[new_point_i] <- TRUE
+            }
+          }
+
+          # if some counterfactual does not sense
+          if (any(viol_daisy) == TRUE) {
+
+            viol_daisy <- which(viol_daisy == TRUE)
+
+            if (length(viol_daisy) > 2) {
+
+              check_daisy <- TRUE
+              viol_daisy <- viol_daisy[2:length(viol_daisy)]
+            } else {
+              check_daisy <- FALSE
+            }
+
+          } else {
+            check_daisy <- FALSE
+          }
+
+          ###
           viol <- rep(FALSE, nrow(mx))
           viol[idx_viol_x] <- TRUE
           viol[idx_viol_y] <- TRUE
+          if (check_daisy == TRUE) {
+            viol[viol_daisy] <- TRUE
+          }
 
           keep <- !viol
           if (any(!keep)) {
@@ -662,6 +706,8 @@ stop("Not available.")
 #' \code{\link{PEAXAI_targets}} (efficiency projections based on \eqn{\beta});
 #' \code{\link[caret]{train}} (model training with class probabilities).
 #'
+#' @importFrom cluster daisy
+#'
 #' @export
 #'
 
@@ -715,6 +761,8 @@ find_beta_maxmin <- function(
       max_y_i <- as.data.frame(t(as.matrix(max_y_i)))
       names(max_y_i) <- names_data[y]
 
+      manifold_check <- FALSE
+
       beta_j <- 0
 
       betas[i,1] <- NA
@@ -737,6 +785,41 @@ find_beta_maxmin <- function(
         names(new_point) <- names(data[,variables])
 
         # prediction_j <- predict(final_model, new_point, type = "prob")[1]
+
+        # ### new
+        # library(dbscan)
+        #
+        # # domain data
+        # manifold <- as.matrix(data[,c(x,y)])
+        #
+        # # 3. Combinar para calcular
+        # data_plus_new_unit <- rbind(manifold, new_point)
+        #
+        # # 4. Calcular LOF (k debe ser similar al número de vecinos que esperarías)
+        # lof_scores <- lof(data_plus_new_unit, minPts = length(c(x,y))*2)
+        # if (tail(lof_scores, 1) > lof_scores[i] & lof_scores[i] > 2) {
+        #   manifold_check <- TRUE
+        # }
+        # ###
+
+        ###
+        # domain data
+        manifold <- as.matrix(data[,c(x,y)])
+        # daisy() maneja automáticamente variables numéricas y categóricas
+        distances <- daisy(rbind(manifold, new_point), metric = "gower")
+
+        # Convertimos a matriz y extraemos la última fila (nuestra distancia con el resto)
+        dist_matrix <- as.matrix(distances)
+        dist_cf <- dist_matrix[nrow(dist_matrix), 1:(nrow(dist_matrix)-1)]
+
+        # El vecino más cercano según Gower
+        min_gower <- min(dist_cf)
+
+        if (min_gower > 0.15) {
+          manifold_check <- TRUE
+        }
+        ###
+
         prediction_j <- PEAXAI_predict(
           data = new_point,
           x = x,
@@ -765,17 +848,16 @@ find_beta_maxmin <- function(
           betas[i, 2] <- beta_j
           control_threshold <- TRUE
 
-        } else if (any(new_point[x] < min_x_i) || any(new_point[y] > max_y_i)) {
+        } else if (any(new_point[x] < min_x_i) || any(new_point[y] > max_y_i) || manifold_check == TRUE) {
           # break the while loop
           betas[i, 2] <- beta_j
           control_threshold <- TRUE
         }
 
-
       }
 
       if (is.na(betas[i,1])) {
-        betas[i, 1] <- beta_j - n_expand
+        betas[i, 1] <- 0
       }
 
     }
