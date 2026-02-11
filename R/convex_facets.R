@@ -55,7 +55,7 @@ convex_facets <- function (
 
   if (length(which(data$class_efficiency == "efficient")) == 0) {
 
-    results_convx <- as.data.frame(matrix(nrow=0))
+    results_convx <- data.frame()
 
   } else {
 
