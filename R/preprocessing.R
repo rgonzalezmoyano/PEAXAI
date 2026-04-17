@@ -114,8 +114,8 @@ validate_parametes_PEAXAI_fitting <- function(
   if (is.null(methods) || !is.list(methods)) {
     stop("`methods` must be a named list.", call. = FALSE)
   }
-  if (!any(names(methods) %in% c("nnet","svmPoly","glm", "rf"))) {
-    stop("`methods` must include at least one of: nnet, svmPoly, glm.", call. = FALSE)
+  if (!any(names(methods) %in% c("nnet","svmPoly","glm", "rf", "svmRadial"))) {
+    stop("`methods` must include at least one of: nnet, svmPoly, glm, rf or svmRadial.", call. = FALSE)
   }
 
   # ----------------------------------------------------------------------------
