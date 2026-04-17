@@ -187,16 +187,29 @@ get_SMOTE_DMUs <- function (
 
     lambda <- rep(prop_imp, ncol(facets))
 
-    # n_comb <- nrow(data_eff)
+    n_comb <- nrow(data_eff)
 
     iter <- 0
-
+    print(sense_balance)
     if (sense_balance == "not_efficient") {
+
+      # proportion importance
+      len <- ncol(facets)
+
+      prop_imp <- 1/len
+
+      lambda <- rep(prop_imp, ncol(facets))
+
 
       # number of not efficient units to create, more than it is necessary
       new_create_ineff <- 4 * create_ineff
-
+      bro_stop <- 0
       while (nrow(save_dataset) < new_create_ineff) {
+print(paste0("nrow save_dataset:", nrow(save_dataset)))
+        # bro_stop <- bro_stop + 1
+        bro_stop <- 0
+        print(bro_stop)
+
 
         idx_eff <- which(data$class_efficiency == "efficient")
 
@@ -208,27 +221,73 @@ get_SMOTE_DMUs <- function (
         ctrl_facet <- TRUE
 
         iter_0 <- 0
+        less_facet <- 0
         while (ctrl_facet == TRUE) {
+          print(paste0("nrow save_dataset:", nrow(save_dataset)))
 
           iter_0 <- iter_0 + 1
+          if (iter_0 == 30 & nrow(save_dataset) == 0) {
+            browser()
+          }
 
-          # if (iter_0 >= 50) browser("No pude encontrar combinación fuera de facets en 50 intentos")
+          # iter_0 <- iter_0 + 1
+
           random_convex <- sample(idx_eff, size = length_facets, replace = FALSE)
+
+          check <- random_convex[order(random_convex)]
+          ref <- facets[1,]
+          ref <- ref[order(ref)]
+
+          if (nrow(facets) == 1 & all(random_convex[order(random_convex)] == ref[order(facets[1,])]) & length_facets - less_facet > 2) {
+
+            less_facet <- less_facet + 1
+
+            random_convex <- sample(idx_eff, size = length_facets - less_facet, replace = FALSE)
+
+            # new
+            # proportion importance
+            len <- length_facets - less_facet
+
+            prop_imp <- 1/len
+
+            lambda <- rep(prop_imp, length_facets - less_facet)
+
+            # brake search
+            ctrl_facet <- FALSE
+
+          }
+
+          if (nrow(facets) == 1 & all(random_convex[order(random_convex)] == ref[order(facets[1,1:(length_facets-less_facet)])]) & length_facets - less_facet == 2) {
+
+            ctrl_facet <- FALSE
+
+          }
+
+          # # not possible
+          # if (nrow(facets) == 1 & all(random_convex[order(random_convex)] == ref[order(facets[1,])]) & length_facets < 2) {
+          #
+          #   browser()
+          #
+          # }
+
           # random_convex <- facets[random_convex,]
           next_sample <- FALSE
 
-          # check not on facet
-          for (facet_i in 1:nrow(facets)) {
+          if (length(random_convex) >= length(facets)) {
 
-            check <- random_convex[order(random_convex)]
-            ref <- facets[facet_i,]
-            ref <- ref[order(ref)]
+            # check not on facet
+            for (facet_i in 1:nrow(facets)) {
 
-            if (all(check == ref)) {
-              next_sample <- TRUE
-              break
+              check <- random_convex[order(random_convex)]
+              ref <- facets[facet_i,]
+              ref <- ref[order(ref)]
+
+              if (all(check == ref)) {
+                next_sample <- TRUE
+                break
+              }
+
             }
-
           }
 
          if (next_sample == TRUE) {
@@ -237,7 +296,7 @@ get_SMOTE_DMUs <- function (
            ctrl_facet <- FALSE
          }
 
-        }
+        } # end while generate random sample
 
         if (is.null(z_numeric)) {
           selection <- data[unlist(as.vector(random_convex)), c(x,y)]
@@ -354,9 +413,10 @@ get_SMOTE_DMUs <- function (
         # save the previous SMOTE units generated
         results_convx$class_efficiency <- "efficient"
         save_dataset <- rbind(save_dataset, results_convx)
-
+        bro_stop <- 0
         # if not too much, is it necessary to create more SMOTE DMUs
         while (nrow(save_dataset) < create_eff) {
+          print(paste0("nrow save_dataset:", nrow(save_dataset)))
 
           # first, select a random index and combination
           idx_save <- sample(nrow(facets), size = 1)
