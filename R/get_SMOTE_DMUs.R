@@ -206,10 +206,10 @@ get_SMOTE_DMUs <- function (
       bro_stop <- 0
       while (nrow(save_dataset) < new_create_ineff) {
 print(paste0("nrow save_dataset:", nrow(save_dataset)))
+
         # bro_stop <- bro_stop + 1
         bro_stop <- 0
         print(bro_stop)
-
 
         idx_eff <- which(data$class_efficiency == "efficient")
 

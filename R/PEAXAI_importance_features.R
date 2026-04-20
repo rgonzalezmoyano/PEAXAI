@@ -572,7 +572,7 @@ PEAXAI_local_importance <- function(
     }
 
     #
-    shap_model <- fastshap::explain(
+    shap_model <- explain(
       object = final_model,
       X = train_data,
       pred_wrapper = f_pred,
@@ -593,89 +593,34 @@ PEAXAI_local_importance <- function(
     importance <- imp_norm
 
   } else if (importance_method[["name"]] == "LIME") {
-browser()
-    # # matrix of data without label
-    # if(target == "real") {
-    #
-    #   labels_DEA <- target_data$class_efficiency
-    #   dataset_chosen <- target_data[, setdiff(names(target_data), "class_efficiency"), drop = FALSE]
-    # } else {
-    #
-    #   labels_DEA <- train_data$class_efficiency
-    #   dataset_chosen <- train_data[, setdiff(names(train_data), "class_efficiency"), drop = FALSE]
-    # }
-    #
-    # # predict efficiency
-    # f_pred <- function(object, newdata) {
-    #
-    #   if (inherits(object, "glm")) {
-    #     predict(object, newdata = newdata, type = type)
-    #   } else {
-    #     predict(object, newdata = newdata, type = type)[, "efficient"]
-    #   }
-    #
-    # }
-    #
-    # # 4) Construir el Predictor de iml
-    # pred_obj <- iml::Predictor$new(
+
+    # matrix of data without label
+    target_data <- target_data[, setdiff(names(target_data), "class_efficiency"), drop = FALSE]
+    train_data <- train_data[, setdiff(names(train_data), "class_efficiency"), drop = FALSE]
+
+    # predict efficiency
+    f_pred <- function(object, newdata) {
+
+      if (inherits(object, "glm")) {
+        predict(object, newdata = newdata, type = type)
+      } else {
+        predict(object, newdata = newdata, type = type)[, "efficient"]
+      }
+
+    }
+   browser()
+
+    # # iml predictor object
+    # pred_obj <- lime(
     #   model = final_model,
-    #   data = dataset_chosen,
-    #   y = labels_DEA,
-    #   predict.function = f_pred,
-    #   type  = "classification"
+    #   data = train_data
+    #   sample.size = ,
+    #   K =,
+    #   x.interest = ,
+    #   class =
     # )
-    #
-    # # Loss Function by AUC
-    # if (inherits(final_model, "glm")) {
-    #
-    #   loss_auc <- function(truth, estimate) {
-    #
-    #     # change to 0/1
-    #     y_bin <- as.numeric(truth == levels(truth)[2])
-    #
-    #     if (length(unique(y_bin)) < 2) return(NA_real_)
-    #
-    #     1 - as.numeric(pROC::auc(response = y_bin, predictor = estimate))
-    #
-    #   }
-    #
-    # } else {
-    #
-    #   loss_auc <- function(truth, estimate) {
-    #
-    #     # change to 0/1
-    #     y_bin <- as.numeric(truth == levels(truth)[1])
-    #
-    #     if (length(unique(y_bin)) < 2) return(NA_real_)
-    #
-    #     1 - as.numeric(pROC::auc(response = y_bin, predictor = estimate))
-    #
-    #   }
-    #
-    # }
-    #
-    # # 6) Permutation Importance (repite permutaciones para estabilidad)
-    #
-    # fi <- iml::FeatureImp$new(
-    #   predictor = pred_obj,
-    #   loss = loss_auc,
-    #   compare = "difference",      # caída de rendimiento vs. modelo completo
-    #   n.repetitions = importance_method[["n.repetitions"]] # sube si quieres más estabilidad
-    # )
-    #
-    # order_names <- names(dataset_chosen)
-    # idx <- match(order_names, fi$results$feature)
-    #
-    # imp <- fi$results[idx, "importance"]
-    #
-    # imp <- as.data.frame(t(imp))
-    #
-    # names(imp) <- names(dataset_chosen)
-    #
-    # # Normalize
-    # sum_imp <- sum(imp)
-    # imp_norm <- imp / sum_imp
-    # importance <- imp_norm
+
+
   }
 
   result_importance <- importance
