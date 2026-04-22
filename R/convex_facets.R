@@ -1,10 +1,14 @@
-#' @title Create New SMOTE Units to Balance Data combinations of m + s
+#' @title Identify Maximal Facets of the Convex Frontier
 #'
-#' @description This function creates new DMUs to address data imbalances. If the majority class is efficient, it generates new inefficient DMUs by worsering the observed units. Conversely, if the majority class is inefficient, it projects inefficient DMUs to the frontier. Finally, a random selection if performed to keep a proportion of 0.65 for the majority class and 0.35 for the minority class.
+#' @description
+#' Identifies the maximal subsets of efficient Decision-Making Units (DMUs)
+#' that lie on the same face (facet) of the efficient frontier. It relies on
+#' the concept of "maximal friends" to determine which efficient units can
+#' be grouped together to form convex combinations under the chosen returns-to-scale assumption.
 #'
-#' @param data A \code{data.frame} containing the variables used in the model.
-#' @param x Column indexes of the input variables in the \code{data}.
-#' @param y Column indexes of the output variables in the \code{data}.
+#' @param data A \code{data.frame} or \code{matrix} containing the variables used in the model.
+#' @param x Integer vector indicating the column indexes of the input variables in \code{data}.
+#' @param y Integer vector indicating the column indexes of the output variables in \code{data}.
 #' @param RTS Text string or number defining the underlying DEA technology /
 #'   returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 #'   \describe{
@@ -18,47 +22,23 @@
 #'
 #' @importFrom deaR make_deadata maximal_friends
 #'
-#' @return It returns a \code{data.frame} with the newly created set of DMUs incorporated.
+#' @return A \code{matrix} where each row represents a maximal facet, and the values are the row indices of the efficient DMUs in \code{data} that form that facet. Returns an empty \code{matrix} if there are no efficient units.
 
 convex_facets <- function (
     data, x, y, RTS = "vrs"
 ) {
 
-  # save a copy
-  copy_data <- data
-
-  # determine samples in a batch
-  units_batch <- 10000
-
-  # first, create set combinations
-  # determinate efficient untis
-  data_eff <- data[data$class_efficiency == "efficient", ]
-
-  # number of efficient units
-  n_eff <- 1:nrow(data_eff)
-
-  # proportion importance
-  len <- length(c(x,y))
-
-  # weight lambda
-  prop_imp <- 1/len
-
-  # create lambda
-  lambda <- rep(prop_imp, ncol(data_eff[, c(x,y)]))
-
-  save_idx_eff <- NULL
-  save_idx_ineff <- NULL
-
-  # --------------------------------------------------------------------------
-  # Determine the efficient combinations by Additive DEA ---------------------
-  # --------------------------------------------------------------------------
+  # ----------------------------------------------------------------------------
+  # Determine the efficient combinations by Additive DEA -----------------------
+  # ----------------------------------------------------------------------------
 
   if (length(which(data$class_efficiency == "efficient")) == 0) {
 
-    results_convx <- data.frame()
+    results_convx <- matrix(nrow = 0, ncol = 0)
 
   } else {
 
+    # Obtain all possible combinations of maximal friends (facets)
     datadea <- make_deadata(
       data,
       inputs = x,
@@ -70,13 +50,16 @@ convex_facets <- function (
       rts = RTS,
       dmu_ref = which(data$class_efficiency == "efficient"))
 
+    # Methodological choice: We only retain the facets with the maximum
+    # number of vertices (i.e. full-dimensional facets in the dataset).
     long <- lengths(eff_convex_list)
     max_long <- max(long)
 
     list_max_facets <- eff_convex_list[long == max_long]
 
-    results_convx <- as.data.frame(do.call(rbind, list_max_facets))
-    results_convx <- as.matrix(results_convx)
+    # Combine into a matrix where each row represents a facet and
+    # columns represent the indices of the DMUs forming it
+    results_convx <- do.call(rbind, list_max_facets)
 
   }
 
