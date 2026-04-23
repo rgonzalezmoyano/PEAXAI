@@ -25,7 +25,7 @@ returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 }}
 }
 \value{
-A \code{matrix} where each row represents a maximal facet, and the values are the row indices of the efficient DMUs in \code{data} that form that facet. Returns an empty \code{data.frame} if there are no efficient units.
+A \code{matrix} where each row represents a maximal facet, and the values are the row indices of the efficient DMUs in \code{data} that form that facet. Returns an empty \code{matrix} if there are no efficient units.
 }
 \description{
 Identifies the maximal subsets of efficient Decision-Making Units (DMUs)
