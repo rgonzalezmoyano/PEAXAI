@@ -852,7 +852,7 @@ PEAXAI_fitting <- function (
 
       calibration_dataset <- rbind(calibration_dataset, calibrating_datasets_by_method[[method_i]][[as.character(best_balance_i)]][[fold_i]][[idx]])
     }
-
+    browser()
     calibration_dataset$obs <- ifelse(calibration_dataset$obs == "efficient", 1,0)
 
     res <- val.prob(
@@ -950,18 +950,19 @@ PEAXAI_fitting <- function (
         p = calibration_dataset_cal$efficient,
         y = calibration_dataset_cal$obs)
 
-      score_cal <- function(r) {
-
-        # # penalizes deviations from (Intercept = 0, Slope = 1) and calibration errors
-        # abs(r[["Intercept"]]) +
-        #   abs(r[["Slope"]] - 1) +
-        #   # r[["Emax"]] +
-        #   r[["Eavg"]]
-        1 - r[["C (ROC)"]]
-
-      }
-
-      accept <- score_cal(res_2) < score_cal(res)
+      # score_cal <- function(r) {
+      #
+      #   # # penalizes deviations from (Intercept = 0, Slope = 1) and calibration errors
+      #   # abs(r[["Intercept"]]) +
+      #   #   abs(r[["Slope"]] - 1) +
+      #   #   # r[["Emax"]] +
+      #   #   r[["Eavg"]]
+      #   1 - r[["C (ROC)"]]
+      #
+      # }
+      #
+      # accept <- score_cal(res_2) < score_cal(res)
+      accept <- TRUE
 
       if (accept == FALSE) {
         # ----------------------------------------------------------------------

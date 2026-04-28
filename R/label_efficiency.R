@@ -60,7 +60,7 @@
 
 label_efficiency <- function (
     data, REF = data, x, y, z_numeric = NULL, z_factor = NULL, RTS = "vrs",
-    B = NULL, alpha = FALSE, m = NULL, bandwidth = NULL, seed
+    B = 200, alpha = FALSE, m = NULL, bandwidth = NULL, seed
   ) {
 
   # check if parameters are well introduced

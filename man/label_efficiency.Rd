@@ -12,7 +12,7 @@ label_efficiency(
   z_numeric = NULL,
   z_factor = NULL,
   RTS = "vrs",
-  B = NULL,
+  B = 200,
   alpha = FALSE,
   m = NULL,
   bandwidth = NULL,

@@ -5,44 +5,45 @@
 \title{Local feature importance for efficiency classifiers}
 \usage{
 PEAXAI_local_importance(
-  data,
+  final_model,
   x,
   y,
-  final_model,
-  background = "train",
-  target = "train",
+  explain_data,
+  reference_data,
   importance_method,
   seed = 314
 )
 }
 \arguments{
-\item{data}{A \code{data.frame} (or \code{matrix}) with predictors and outcomes.
-The function will internally reorder columns to \code{c(x, y)}.}
+\item{final_model}{A fitted model. If it is a base-\code{glm} binomial, probabilities
+are obtained with \code{type = "response"}; otherwise the function expects
+\code{predict(type = "prob")} with a column named \code{"efficient"}.}
 
 \item{x}{Integer or character vector with the columns used as \strong{inputs} (predictors).}
 
 \item{y}{Integer or character vector with the columns used as \strong{outputs} (targets used
 to define \code{class_efficiency} in training; not included in \code{X} when explaining).}
 
-\item{final_model}{A fitted model. If it is a base-\code{glm} binomial, probabilities
-are obtained with \code{type = "response"}; otherwise the function expects
-\code{predict(type = "prob")} with a column named \code{"efficient"}.}
+\item{explain_data}{A \code{data.frame} with the original observed DMUs (or new DMUs)
+on which \strong{local} explanations are computed.}
 
-\item{background}{Character, \code{"train"} (default) or \code{"real"}.
-Background data define the reference distribution used when perturbing features.}
-
-\item{target}{Character, \code{"train"} (default) or \code{"real"}.
-Dataset on which \strong{local} importance is computed (one explanation per observation).}
+\item{reference_data}{A \code{data.frame} with the training dataset used to fit
+the optimal model returned by \code{PEAXAI_fitting()}. Depending on the class-
+balancing procedure, this dataset may contain only real observed DMUs or both
+real and synthetic DMUs. It defines the reference distribution for perturbing features.}
 
 \item{importance_method}{A named list (or data.frame-like) with the backend and its args:
 \describe{
-\item{\code{name}}{One of \code{"SA"}, \code{"SHAP"}, \code{"PI"}.}
+\item{\code{name}}{One of \code{"SA"}, \code{"SHAP"}, \code{"LIME"}.}
 \item{\code{method}}{(SA) One of \code{"1D-SA"}, \code{"sens"}, \code{"DSA"}, \code{"MSA"}, \code{"CSA"}, \code{"GSA"}.}
 \item{\code{measures}}{(SA) e.g. \code{"AAD"}, \code{"gradient"}, \code{"variance"}, \code{"range"}.}
 \item{\code{levels}}{(SA) Discretization levels used by \code{rminer::Importance}.}
 \item{\code{baseline}}{(SA) Baseline value for SA, if applicable. If omitted, the DMU itself is used as baseline.}
 \item{\code{nsim}}{(SHAP) Number of Monte Carlo samples for \code{fastshap::explain}.}
-\item{\code{n.repetitions}}{(PI) Number of perturbation/permutation draws per feature and observation.}
+\item{\code{n_permutations}}{(LIME) Number of permutations per observation (default: 5000).}
+\item{\code{feature_select}}{(LIME) Feature selection method, e.g., \code{"auto"}, \code{"none"}, \code{"forward_selection"} (default: \code{"auto"}).}
+\item{\code{bin_continuous}}{(LIME) Logical indicating if continuous features should be binned (default: \code{TRUE}).}
+\item{\code{n_bins}}{(LIME) Number of bins for continuous features (default: 4).}
 }}
 
 \item{seed}{Integer. Seed for reproducibility.}
@@ -61,13 +62,11 @@ three XAI backends:
 \item \code{"SHAP"} — Model-agnostic SHAP approximations via \pkg{fastshap}.
 \item \code{"LIME"} — Model-agnostic LIME approximations via \pkg{lime}
 }
-You can evaluate the model on either the training domain (\code{background = "train"})
-or the real-world domain (\code{background = "real"}) and compute local importance on a
-chosen \code{target} set (\code{"train"} or \code{"real"}).
+You can compute local importance on specific DMUs provided in \code{explain_data},
+using \code{reference_data} as the reference distribution or training background.
 For each target DMU, importances are returned normalized to sum to 1 \strong{within that DMU}.
 }
 \details{
-Internally, the function builds background/target sets with \code{xai_prepare_sets()}.
 Local explanations are produced for the predicted probability \eqn{\hat{p}_i = P(\text{efficient}\mid x_i)}.
 For \code{glm} models, the positive class is assumed to be the \strong{second level}
 (\code{"efficient"}) and probabilities are extracted with \code{type = "response"}.
@@ -77,9 +76,9 @@ The meaning of “local importance” depends on the backend:
 \itemize{
 \item \code{"SHAP"} returns per-observation SHAP attributions; importances are computed
 from attribution magnitudes (e.g., \code{abs(SHAP)}) and normalized to sum to 1 per DMU.
-\item \code{"LIME"} perturbs one feature at a time for a given DMU by sampling from the
-background distribution (via permutation/Monte Carlo draws), and measures the mean
-absolute change in \eqn{\hat{p}_i}; results are normalized per DMU.
+\item \code{"LIME"} fits a local surrogate linear model around the DMU using
+permutations from the reference distribution; the absolute weights of the local
+model are used as importance scores, normalized per DMU.
 \item \code{"SA"} computes local sensitivity of \eqn{\hat{p}_i} to each feature around
 the DMU (using the chosen SA method/measure) and normalizes sensitivities per DMU.
 }
@@ -125,9 +124,8 @@ the DMU (using the chosen SA method/measure) and normalizes sensitivities per DM
   final_model <- models[["best_model_fit"]][["glm"]]
 
   imp_local <- PEAXAI_local_importance(
-    data = data, x = x, y = y,
-    final_model = final_model,
-    background = "real", target = "real",
+    final_model = final_model, x = x, y = y,
+    explain_data = data, reference_data = data,
     importance_method = list(name = "SHAP", nsim = 100)
   )
 
@@ -137,5 +135,6 @@ the DMU (using the chosen SA method/measure) and normalizes sensitivities per DM
 }
 \seealso{
 \code{\link[fastshap]{explain}},
-\code{\link[rminer]{Importance}}
+\code{\link[rminer]{Importance}},
+\code{\link[lime]{lime}}
 }

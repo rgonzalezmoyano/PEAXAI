@@ -5,34 +5,33 @@
 \title{Global feature importance for efficiency classifiers}
 \usage{
 PEAXAI_global_importance(
-  data,
+  final_model,
   x,
   y,
-  final_model,
-  background = "train",
-  target = "train",
+  explain_data,
+  reference_data,
   importance_method,
   seed = 314
 )
 }
 \arguments{
-\item{data}{A \code{data.frame} (or \code{matrix}) with predictors and outcomes.
-The function will internally reorder columns to \code{c(x, y)}.}
+\item{final_model}{A fitted model. If it is a base-\code{glm} binomial, probabilities
+are obtained with \code{type = "response"}; otherwise the function expects
+\code{predict(type = "prob")} with a column named \code{"efficient"}.}
 
 \item{x}{Integer or character vector with the columns used as \strong{inputs} (predictors).}
 
 \item{y}{Integer or character vector with the columns used as \strong{outputs} (targets used
 to define \code{class_efficiency} in training; not included in \code{X} when explaining).}
 
-\item{final_model}{A fitted model. If it is a base-\code{glm} binomial, probabilities
-are obtained with \code{type = "response"}; otherwise the function expects
-\code{predict(type = "prob")} with a column named \code{"efficient"}.}
+\item{explain_data}{A \code{data.frame} with the original observed DMUs passed
+by the user to \code{PEAXAI_fitting()}. This dataset represents the real,
+non-augmented observations on which explanations can be computed.}
 
-\item{background}{Character, \code{"train"} (default) or \code{"real"}.
-Background data define the distribution used for the reference model behaviour.}
-
-\item{target}{Character, \code{"train"} (default) or \code{"real"}.
-Dataset on which importance is computed.}
+\item{reference_data}{A \code{data.frame} with the training dataset used to fit
+the optimal model returned by \code{PEAXAI_fitting()}. Depending on the class-
+balancing procedure, this dataset may contain only real observed DMUs or both
+real and synthetic DMUs.}
 
 \item{importance_method}{A named list (or data.frame-like) with the backend and its args:
 \describe{
@@ -111,9 +110,8 @@ For other models (e.g., \pkg{caret}), \code{predict(type = "prob")[, "efficient"
   final_model <- models[["best_model_fit"]][["glm"]]
 
   imp <- PEAXAI_global_importance(
-    data = data, x = x, y = y,
-    final_model = final_model,
-    background = "real", target = "real",
+    final_model = final_model, x = x, y = y,
+    explain_data = data, reference_data = data,
     importance_method = list(name = "PI", n.repetitions = 5)
   )
 
