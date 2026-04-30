@@ -214,6 +214,11 @@ PEAXAI_fitting <- function (
   # ----------------------------------------------------------------------------
   # Step 1: Data labeling ------------------------------------------------------
   # ----------------------------------------------------------------------------
+  if (isTRUE(verbose)) {
+    message(
+      paste0("Step 1: Labeling all observations...")
+    )
+  }
 
   data <- label_efficiency(
     data = data,
@@ -232,7 +237,10 @@ PEAXAI_fitting <- function (
   if (isTRUE(verbose)) {
     info_imb_rate <- round(prop.table(table(data$class_efficiency))[1], 4) * 100
     message(
-      paste0("The dataset has an imbalance rate of ", info_imb_rate, "%.")
+      sprintf(
+        'The minority class, labeled as "efficient", represents %.2f%% of the dataset.',
+        info_imb_rate
+      )
     )
   }
 
@@ -249,6 +257,13 @@ PEAXAI_fitting <- function (
 
   } else {
 
+    if (isTRUE(verbose)) {
+      message(
+        sprintf("A hold-out validation set will be created using %.1f%% of the data.",
+                hold_out * 100)
+      )
+    }
+
     # validation set
     valid_index <- createDataPartition(
       data$class_efficiency,
@@ -257,22 +272,36 @@ PEAXAI_fitting <- function (
 
     # split data
     valid_data <- data[valid_index, c(x,y)]
+
+    valid_data <- cbind(
+      valid_data,
+      data.frame(
+        class_efficiency = data[valid_index, "class_efficiency"]
+      )
+    )
+
     train_data <- data[-valid_index, c(x,y)]
 
+    if (isTRUE(verbose)) {
+      message(
+        paste0("Step 1.1: Labeling train observations...")
+      )
+    }
+
     # label DMUs by technology observed in train
-    valid_data <- label_efficiency(
-      data = valid_data,
-      REF = train_data,
-      x = x,
-      y = y,
-      z_numeric = z_numeric,
-      z_factor = z_factor,
-      RTS = RTS,
-      B = B,
-      m = m,
-      alpha = alpha,
-      seed = seed
-    )
+    # valid_data <- label_efficiency(
+    #   data = valid_data,
+    #   REF = train_data,
+    #   x = x,
+    #   y = y,
+    #   z_numeric = z_numeric,
+    #   z_factor = z_factor,
+    #   RTS = RTS,
+    #   B = B,
+    #   m = m,
+    #   alpha = alpha,
+    #   seed = seed
+    # )
 
     train_data <- label_efficiency(
       data = train_data,
@@ -300,67 +329,72 @@ PEAXAI_fitting <- function (
   # ----------------------------------------------------------------------------
   # the original train dataset
   real_balance <- prop.table(table(train_data$class_efficiency))[["efficient"]]
-  datasets_to_train <- list(train_data)
+  datasets_to_train <- vector("list", length(imbalance_rate)+1)
+
+  datasets_to_train[[1]] <- train_data
   names(datasets_to_train)[1] <- paste0(as.character(round(real_balance, 4)),"*")
+
+  names(datasets_to_train)[2:length(datasets_to_train)] <- as.character(imbalance_rate)
+
   real_balance_stable <- paste0(as.character(round(real_balance, 4)),"*")
 
   # ----------------------------------------------------------------------------
   # Step 3.1: Addressing imbalance rate (if there is convexity) ----------------
   # ----------------------------------------------------------------------------
-  RTS_available <- c("1", "vrs", "0", "crs")
+  RTS_available <- c("1", "vrs")
 
-  if (!is.null(imbalance_rate)) {
-
-    if (as.character(RTS) %in% RTS_available) {
-
-      if (is.null(z_numeric) & is.null(z_numeric)) {
-
-        # create new datasets addressing imbalance
-        train_data_SMOTE <- SMOTE_data(
-          data = train_data,
-          x = x,
-          y = y,
-          RTS = RTS,
-          balance_data = imbalance_rate,
-          seed = seed
-        )
-
-      } else {
-
-        # create new datasets addressing imbalance
-        train_data_SMOTE <- SMOTE_Z_data(
-          data = train_data,
-          x = x,
-          y = y,
-          z_numeric = z_numeric,
-          z_factor = z_factor,
-          balance_data = imbalance_rate,
-          RTS = RTS,
-          B = B,
-          m = m,
-          alpha = alpha,
-          bandwidth = bandwidth,
-          seed = seed
-        )
-
-      }
-
-      datasets_to_train_FINAL <- append(train_data_SMOTE, datasets_to_train, after = 0)
-
-    } else {
-      message(
-        "Without the convexity assumption, SMOTE units cannot be created on the efficient frontier."
-      )
-
-    }
-
-  } else {
-
-    datasets_to_train_FINAL <- datasets_to_train
-  }
+  # if (!is.null(imbalance_rate)) {
+  #
+  #   if (as.character(RTS) %in% RTS_available) {
+  #
+  #     if (is.null(z_numeric) & is.null(z_numeric)) {
+  #
+  #       # create new datasets addressing imbalance
+  #       train_data_SMOTE <- SMOTE_data(
+  #         data = train_data,
+  #         x = x,
+  #         y = y,
+  #         RTS = RTS,
+  #         balance_data = imbalance_rate,
+  #         seed = seed
+  #       )
+  #
+  #     } else {
+  #
+  #       # create new datasets addressing imbalance
+  #       train_data_SMOTE <- SMOTE_Z_data(
+  #         data = train_data,
+  #         x = x,
+  #         y = y,
+  #         z_numeric = z_numeric,
+  #         z_factor = z_factor,
+  #         balance_data = imbalance_rate,
+  #         RTS = RTS,
+  #         B = B,
+  #         m = m,
+  #         alpha = alpha,
+  #         bandwidth = bandwidth,
+  #         seed = seed
+  #       )
+  #
+  #     }
+  #
+  #     datasets_to_train_FINAL <- append(train_data_SMOTE, datasets_to_train, after = 0)
+  #
+  #   } else {
+  #     message(
+  #       "Without the convexity assumption, SMOTE units cannot be created on the efficient frontier."
+  #     )
+  #
+  #   }
+  #
+  # } else {
+  #
+  #   datasets_to_train_FINAL <- datasets_to_train
+  # }
 
   # ----------------------------------------------------------------------------
-  # Step 3.2: Performance with different hyperparameters -----------------------
+  # Step 3.2: Train performance with different hyperparameters -----------------
   # ----------------------------------------------------------------------------
   # save model
   best_models <- vector("list", length(methods))
@@ -382,12 +416,13 @@ PEAXAI_fitting <- function (
   # calibrating_datasets <- vector("list", length(datasets_to_train))
   # names(calibrating_datasets) <- names(datasets_to_train)
 
-  save_calibrations_dataset <- vector("list", length(methods))
-  names(save_calibrations_dataset) <- names(save_calibrations_dataset)
+  # save_calibrations_dataset <- vector("list", length(methods))
+  # names(save_calibrations_dataset) <- names(save_calibrations_dataset)
 
   # metrics evaluation
   metric <- metric_priority[1]
 
+  set.seed(seed)
   # create k-folds. Same folds for every ML method
   folds <- createFolds(
     datasets_to_train[[1]]$class_efficiency,
@@ -405,16 +440,25 @@ PEAXAI_fitting <- function (
   test_idx_by_fold <- vector("list", length(folds))
   names(test_idx_by_fold) <- names(folds)
 
-  # calibration datasets (global; do NOT reinitialize inside folds)
-  calibrating_datasets_by_method <- vector("list", length(methods))
-  names(calibrating_datasets_by_method) <- names(methods)
+  # # calibration datasets (global; do NOT reinitialize inside folds)
+  # calibrating_datasets_by_method <- vector("list", length(methods))
+  # names(calibrating_datasets_by_method) <- names(methods)
+  #
+  # save_calibration_model <- vector("list", length(methods))
+  # names(save_calibration_model) <- names(methods)
 
-  save_calibration_model <- vector("list", length(methods))
-  names(save_calibration_model) <- names(methods)
+  # cross validation
+  if (isTRUE(verbose)) {
+    message("Step 2: Fitting models using cross-validation...")
+  }
 
   for(fold_i in names(folds)) {
 
-    message(fold_i)
+    if (isTRUE(verbose)) {
+      message(
+        paste0(fold_i, " of ", length(names(folds)))
+      )
+    }
 
     test_set_idx <- unlist(folds[fold_i])
     train_set_idx <- unlist(folds[names(folds) != fold_i])
@@ -448,10 +492,8 @@ PEAXAI_fitting <- function (
     # --------------------------------------------------------------------------
     # Step 3.1: Addressing imbalance rate (if there is convexity) ---------------
     # --------------------------------------------------------------------------
-    datasets_to_train <- list(train_set)
-    names(datasets_to_train)[1] <- real_balance_stable
-
-    RTS_available <- c("1", "vrs", "0", "crs")
+    # datasets_to_train <- list(train_set)
+    # names(datasets_to_train)[1] <- real_balance_stable
 
     if (!is.null(imbalance_rate)) {
 
@@ -488,12 +530,17 @@ PEAXAI_fitting <- function (
 
         }
 
-        datasets_to_train <- append(train_data_SMOTE, datasets_to_train, after = 0)
+        # save datasets in this fold_i
+        datasets_to_train_fold_i <- vector("list", length = 1)
+        datasets_to_train_fold_i[[1]] <- train_set
+        names(datasets_to_train_fold_i)[1] <- real_balance_stable
+
+        datasets_to_train_fold_i <- append(train_data_SMOTE, datasets_to_train_fold_i, after = 0)
 
       } else {
         message("Without the convexity assumption, SMOTE units cannot be created on the efficient frontier.")
       }
-    } # end balancing
+    } # end balancing fold_i
 
     # Train and get performance
     performance_train_all_by_method <- vector("list", length(methods))
@@ -509,7 +556,7 @@ PEAXAI_fitting <- function (
 
       if (isTRUE(verbose)) message(paste0("Training ", method_i, " method."))
 
-      for (datasets_to_train_i in names(datasets_to_train)) {
+      for (datasets_to_train_i in names(datasets_to_train_fold_i)) {
 
         if(method_i == "glm") {
 
@@ -530,7 +577,7 @@ PEAXAI_fitting <- function (
 
           # train model (inner CV handled in train_PEAXAI through trControl)
           model_fit <- train_PEAXAI(
-            data = datasets_to_train[[datasets_to_train_i]],
+            data = datasets_to_train_fold_i[[datasets_to_train_i]],
             method = method_i,
             parameters = new_parameters,
             trControl = trControl,
@@ -553,20 +600,20 @@ PEAXAI_fitting <- function (
           # reference
           y_obs <- factor(test_set[, "class_efficiency"], levels = levls)
 
-          # save calibration test per fold/method/balance/grid
-          calibration <- cbind(as.data.frame(y_obs), y_hat_prob)
-          names(calibration) <- c("obs", "efficient")
-
-          # check if Calibration is needed
-          y_obs_label <- ifelse(y_obs == "efficient", 1,0)
-
-          eps <- 1e-5
-          y_hat_prob <- pmin(pmax(y_hat_prob, eps), 1 - eps)
-
-          calibration$DMU <- test_set_idx
-
-          # store calibration for this fold
-          calibrating_datasets_by_method[[method_i]][[datasets_to_train_i]][[fold_i]][[grid_i]] <- calibration
+          # # save calibration test per fold/method/balance/grid
+          # calibration <- cbind(as.data.frame(y_obs), y_hat_prob)
+          # names(calibration) <- c("obs", "efficient")
+          #
+          # # check if Calibration is needed
+          # y_obs_label <- ifelse(y_obs == "efficient", 1,0)
+          #
+          # eps <- 1e-5
+          # y_hat_prob <- pmin(pmax(y_hat_prob, eps), 1 - eps)
+          #
+          # calibration$DMU <- test_set_idx
+          #
+          # # store calibration for this fold
+          # calibrating_datasets_by_method[[method_i]][[datasets_to_train_i]][[fold_i]][[grid_i]] <- calibration
 
           # confusion matrix
           cm <- confusionMatrix(
@@ -618,7 +665,7 @@ PEAXAI_fitting <- function (
           # --------------------------------------------------------------------
           # cross start
           y_bin <- ifelse(y_obs == "efficient", 1, 0)
-          p <- calibration$efficient
+          p <- y_hat_prob
           eps <- 1e-15
           p_clipped <- pmin(pmax(p, eps), 1 - eps)
 
@@ -629,7 +676,7 @@ PEAXAI_fitting <- function (
           # cross-entropy EFFICIENT
           idx_eff <- which(y_bin == 1)
           y_bin_eff <- y_bin[idx_eff]
-          p <- calibration$efficient[idx_eff]
+          p <- y_hat_prob[idx_eff]
           eps <- 1e-15
           p_clipped <- pmin(pmax(p, eps), 1 - eps)
 
@@ -640,7 +687,7 @@ PEAXAI_fitting <- function (
           # cross-entropy NOT EFFICIENT
           idx_not_eff <- which(y_bin == 0)
           y_bin_not_eff <- y_bin[idx_not_eff]
-          p <- calibration$efficient[idx_not_eff]
+          p <- y_hat_prob[idx_not_eff]
           eps <- 1e-15
           p_clipped <- pmin(pmax(p, eps), 1 - eps)
 
@@ -832,11 +879,51 @@ PEAXAI_fitting <- function (
       idx <- 1
     }
 
-    # train the best model
+    # train the best model TRAIN
     # NO VALIDATION SET
+
+    if (best_balance_i != real_balance_stable) {
+      # generate the best balanced class distribution
+
+      if (is.null(z_numeric) & is.null(z_numeric)) {
+
+        # create new datasets addressing imbalance
+        train_data_SMOTE <- SMOTE_data(
+          data = train_data,
+          x = x,
+          y = y,
+          RTS = RTS,
+          balance_data = as.numeric(best_balance_i),
+          seed = seed
+        )
+
+      } else {
+
+        # create new datasets addressing imbalance
+        train_data_SMOTE <- SMOTE_Z_data(
+          data = train_data,
+          x = x,
+          y = y,
+          z_numeric = z_numeric,
+          z_factor = z_factor,
+          balance_data = as.numeric(best_balance_i),
+          RTS = RTS,
+          B = B,
+          m = m,
+          alpha = alpha,
+          bandwidth = bandwidth,
+          seed = seed
+        )
+
+      }
+
+      datasets_to_train[[best_balance_i]] <- train_data_SMOTE[[best_balance_i]]
+
+    }
+
     # All data used, performance is obteined of cv results
     model_fit <- train_PEAXAI(
-      data = datasets_to_train_FINAL[[as.character(best_balance_i)]],
+      data = datasets_to_train[[best_balance_i]],
       method = method_i,
       parameters = best_methods[[method_i]],
       trControl = trainControl(method = "none", classProbs = TRUE),
@@ -846,142 +933,117 @@ PEAXAI_fitting <- function (
 
     performance <- best_results_train[1,]
 
-    # save calibration
-    calibration_dataset <- NULL
-    for(fold_i in names(folds)) {
-
-      calibration_dataset <- rbind(calibration_dataset, calibrating_datasets_by_method[[method_i]][[as.character(best_balance_i)]][[fold_i]][[idx]])
-    }
-    browser()
-    calibration_dataset$obs <- ifelse(calibration_dataset$obs == "efficient", 1,0)
-
-    res <- val.prob(
-      p = calibration_dataset$efficient,
-      y = calibration_dataset$obs)
-
-    # check if it is necessary calibrator model
-    if (res["U:p"] < alpha | res["S:p"] < alpha | abs(res["Intercept"]) > 0.2 | res["Slope"] - 1 > 0.2) {
-
-      # function to apply calibration
-      predict_calibrated <- function(newdata, model_fit, calibration_model, mth_cal) {
-
-        s_new <- predict(model_fit, newdata = newdata, type = "prob")[, "efficient"]
-
-        if (mth_cal == "isotonic") {
-          # calibration_model is a function: iso_fun
-          return(calibration_model(s_new))
-        }
-
-        # platt (glm)
-        return(
-          predict(calibration_model, newdata = data.frame(s = s_new), type = "response")
-        )
-      }
-
-      if (mth_cal == "isotonic") {
-
-        # 1. Variable respuesta binaria (1 = efficient)
-        y_prob <- calibration_dataset$obs
-
-        # 2. Probabilidades "raw" del modelo en el conjunto de calibración
-        s <- calibration_dataset$efficient
-
-        # 3. Ajuste isotónico (monótono creciente)
-        iso_fit <- gpava(z = s, y = y_prob)
-
-        # 4. Creamos una función continua para cualquier valor de probabilidad
-        iso_fun <- approxfun(iso_fit$x, iso_fit$yf, rule = 2)
-
-        calibration_model <- iso_fun
-
-        # predict_calibrated <- function(newdata, model_fit, model_cal) {
-        #
-        #   # Probabilidades originales del modelo
-        #   s_new <- predict(model_fit,
-        #                    newdata = newdata,
-        #                    type = "prob")[, "efficient"]
-        #
-        #   # Probabilidades calibradas con regresión isotónica
-        #   p_cal <- model_cal(s_new)
-        #
-        #   return(p_cal)
-        # }
-
-      } else {
-
-        # 1. Variable respuesta binaria (1 = efficient)
-        y_prob <- calibration_dataset$obs
-
-        # 2. Probabilidades "raw" del modelo en el conjunto de calibración
-        s <- calibration_dataset$efficient
-
-        # Platt
-        platt_mod <- glm(y_prob ~ s, family = binomial)
-        summary(platt_mod)
-
-        calibration_model <- platt_mod
-
-        # # apply calibration
-        # predict_calibrated <- function(newdata, model_fit, model_cal) {
-        #
-        #   s_new <- predict(model_fit, newdata = newdata, type = "prob")[, "efficient"]
-        #
-        #   # 2. Probabilidad calibrada con Platt
-        #   p_cal <- predict(model_cal,
-        #                    newdata = data.frame(s = s_new),
-        #                    type = "response")
-        #
-        #   return(p_cal)
-        # }
-
-      }
-
-      # check is calibration works
-      # check calibration
-      calibration_dataset_cal <- calibration_dataset
-
-      calibration_dataset_cal$efficient <- predict_calibrated(
-        newdata = data[calibration_dataset_cal$DMU,c(x,y,z_numeric,z_factor)],
-        model_fit = model_fit,
-        calibration_model = calibration_model,
-        mth_cal = mth_cal)
-
-      res_2 <- val.prob(
-        p = calibration_dataset_cal$efficient,
-        y = calibration_dataset_cal$obs)
-
-      # score_cal <- function(r) {
-      #
-      #   # # penalizes deviations from (Intercept = 0, Slope = 1) and calibration errors
-      #   # abs(r[["Intercept"]]) +
-      #   #   abs(r[["Slope"]] - 1) +
-      #   #   # r[["Emax"]] +
-      #   #   r[["Eavg"]]
-      #   1 - r[["C (ROC)"]]
-      #
-      # }
-      #
-      # accept <- score_cal(res_2) < score_cal(res)
-      accept <- TRUE
-
-      if (accept == FALSE) {
-        # ----------------------------------------------------------------------
-        # calibration doesn't work ---------------------------------------------
-        # ----------------------------------------------------------------------
-        calibration_model <- NULL
-      }
-
-    } else {
-      # ------------------------------------------------------------------------
-      # NO calibration ---------------------------------------------------------
-      # ------------------------------------------------------------------------
-      calibration_model <- NULL
-    }
+#     # save calibration
+#     calibration_dataset <- NULL
+#     for(fold_i in names(folds)) {
+#
+#       calibration_dataset <- rbind(calibration_dataset, calibrating_datasets_by_method[[method_i]][[as.character(best_balance_i)]][[fold_i]][[idx]])
+#     }
+#
+#     calibration_dataset$obs <- ifelse(calibration_dataset$obs == "efficient", 1,0)
+#
+#     res <- val.prob(
+#       p = calibration_dataset$efficient,
+#       y = calibration_dataset$obs)
+#
+#     # check if it is necessary calibrator model
+#     if (res["U:p"] < alpha | res["S:p"] < alpha | abs(res["Intercept"]) > 0.2 | res["Slope"] - 1 > 0.2) {
+#
+#       # function to apply calibration
+#       predict_calibrated <- function(newdata, model_fit, calibration_model, mth_cal) {
+#
+#         s_new <- predict(model_fit, newdata = newdata, type = "prob")[, "efficient"]
+#
+#         if (mth_cal == "isotonic") {
+#           # calibration_model is a function: iso_fun
+#           return(calibration_model(s_new))
+#         }
+#
+#         # platt (glm)
+#         return(
+#           predict(calibration_model, newdata = data.frame(s = s_new), type = "response")
+#         )
+#       }
+#
+#       if (mth_cal == "isotonic") {
+#
+#         # 1. Variable respuesta binaria (1 = efficient)
+#         y_prob <- calibration_dataset$obs
+#
+#         # 2. Probabilidades "raw" del modelo en el conjunto de calibración
+#         s <- calibration_dataset$efficient
+#
+#         # 3. Ajuste isotónico (monótono creciente)
+#         iso_fit <- gpava(z = s, y = y_prob)
+#
+#         # 4. Creamos una función continua para cualquier valor de probabilidad
+#         iso_fun <- approxfun(iso_fit$x, iso_fit$yf, rule = 2)
+#
+#         calibration_model <- iso_fun
+#
+#       } else {
+#
+#         # platt
+#         # 1. Variable respuesta binaria (1 = efficient)
+#         y_prob <- calibration_dataset$obs
+#
+#         # 2. Probabilidades "raw" del modelo en el conjunto de calibración
+#         s <- calibration_dataset$efficient
+#
+#         # Platt
+#         platt_mod <- glm(y_prob ~ s, family = binomial)
+#         summary(platt_mod)
+#
+#         calibration_model <- platt_mod
+#
+#       }
+# browser()
+#       # check is calibration works
+#       # check calibration
+#       calibration_dataset_cal <- calibration_dataset
+#
+#       calibration_dataset_cal$efficient <- predict_calibrated(
+#         newdata = data[calibration_dataset_cal$DMU,c(x,y,z_numeric,z_factor)],
+#         model_fit = model_fit,
+#         calibration_model = calibration_model,
+#         mth_cal = mth_cal)
+#
+#       res_2 <- val.prob(
+#         p = calibration_dataset_cal$efficient,
+#         y = calibration_dataset_cal$obs)
+#
+#       # score_cal <- function(r) {
+#       #
+#       #   # # penalizes deviations from (Intercept = 0, Slope = 1) and calibration errors
+#       #   # abs(r[["Intercept"]]) +
+#       #   #   abs(r[["Slope"]] - 1) +
+#       #   #   # r[["Emax"]] +
+#       #   #   r[["Eavg"]]
+#       #   1 - r[["C (ROC)"]]
+#       #
+#       # }
+#       #
+#       # accept <- score_cal(res_2) < score_cal(res)
+#       # accept <- TRUE
+#       #
+#       # if (accept == FALSE) {
+#       #   # ----------------------------------------------------------------------
+#       #   # calibration doesn't work ---------------------------------------------
+#       #   # ----------------------------------------------------------------------
+#       #   calibration_model <- NULL
+#       # }
+#
+#     } else {
+#       # ------------------------------------------------------------------------
+#       # NO calibration ---------------------------------------------------------
+#       # ------------------------------------------------------------------------
+#       calibration_model <- NULL
+#     }
 
     # save results
     save_performance_train[[method_i]] <- performance
     save_best_model_fit[[method_i]] <- model_fit
-    save_calibration_model[[method_i]] <- calibration_model
+    # save_calibration_model[[method_i]] <- calibration_model
 
     # WITH VALIDATION SET
     # It is necessary to check the performance of the best model without cv on validation set
@@ -991,7 +1053,7 @@ PEAXAI_fitting <- function (
       # --------------------------------------------------------------------
       # performance --------------------------------------------------------
       # --------------------------------------------------------------------
-
+      calibration_model <- NULL
       # check performance on valid data
       if (!is.null(calibration_model)) {
 
@@ -1003,8 +1065,11 @@ PEAXAI_fitting <- function (
         )
 
       } else {
+
         y_hat <- predict(model_fit, newdata = valid_data, type = "prob")[["efficient"]]
+
       }
+
       # y_hat <- predict(model_fit, newdata = valid_data, type = "prob")[["efficient"]]
       y_hat_prob <- y_hat
       y_obs <- valid_data$class_efficiency
@@ -1086,6 +1151,18 @@ PEAXAI_fitting <- function (
           y_bin * log(p_clipped) + (1 - y_bin) * log(1 - p_clipped)
         )
 
+        # cross entropy NOT efficient class
+        p <- y_hat_prob[y_bin == 0]
+        y_bin <- y_bin[y_bin == 0]
+
+        # no log(0)
+        eps <- 1e-15
+        p_clipped <- pmin(pmax(p, eps), 1 - eps)
+
+        cross_entropy_not_efficient <- -mean(
+          y_bin * log(p_clipped) + (1 - y_bin) * log(1 - p_clipped)
+        )
+
         performance <- c(
           cm$overall[c("Accuracy", "Kappa")],
           cm$byClass[c("Recall", "Specificity",
@@ -1095,7 +1172,8 @@ PEAXAI_fitting <- function (
           "ROC_AUC" = roc_obj$auc,
           "PR_AUC" = unname(pr_obj$auc.integral),
           "Cross_Entropy" = cross_entropy,
-          "Cross_Entropy_Efficient" = cross_entropy_efficient
+          "Cross_Entropy_Efficient" = cross_entropy_efficient,
+          "Cross_Entropy_Efficient" = cross_entropy_not_efficient
         )
 
         # save a copy
@@ -1136,6 +1214,62 @@ PEAXAI_fitting <- function (
 
       save_performance_validation[[method_i]] <- performance
 
+      # train the FINAL model train+hold_out
+      if (best_balance_i != real_balance_stable) {
+        # generate the best balanced class distribution
+
+        if (is.null(z_numeric) & is.null(z_numeric)) {
+
+          # create new datasets addressing imbalance
+          all_data_SMOTE <- SMOTE_data(
+            data = all_data,
+            x = x,
+            y = y,
+            RTS = RTS,
+            balance_data = as.numeric(best_balance_i),
+            seed = seed
+          )
+
+          all_data_SMOTE <- all_data_SMOTE[[1]]
+
+        } else {
+
+          # create new datasets addressing imbalance
+          all_data_SMOTE <- SMOTE_Z_data(
+            data = all_data,
+            x = x,
+            y = y,
+            z_numeric = z_numeric,
+            z_factor = z_factor,
+            balance_data = as.numeric(best_balance_i),
+            RTS = RTS,
+            B = B,
+            m = m,
+            alpha = alpha,
+            bandwidth = bandwidth,
+            seed = seed
+          )
+
+          all_data_SMOTE <- all_data_SMOTE[[1]]
+
+        }
+
+      } else {
+        all_data_SMOTE <- all_data
+      }
+      browser()
+
+      model_fit <- train_PEAXAI(
+        data = all_data_SMOTE,
+        method = method_i,
+        parameters = best_methods[[method_i]],
+        trControl = trainControl(method = "none", classProbs = TRUE),
+        metric_priority = metric_priority[1],
+        seed = seed
+      )
+
+      save_best_model_fit[[method_i]] <- model_fit
+
     } # end hold out
 
   } # end method
@@ -1143,150 +1277,159 @@ PEAXAI_fitting <- function (
   # show results without hold out
   if(is.null(hold_out)) {
 
-    if (is.null(hold_out)) {
-
-      if(null_calibration) {
-        save_calibration_model <- NULL
-      }
-
-      output_PEAXAI_models <- list(
-        best_model_fit = save_best_model_fit,
-        performance_train = save_performance_train,
-        performance_train_all = performance_train_all_by_method,
-        # calibration_dataset = save_calibrations_dataset,
-        calibration_model = save_calibration_model
-      )
-
-      return(output_PEAXAI_models)
-
+    if(null_calibration) {
+      save_calibration_model <- NULL
     }
 
-  }
-
-  # It is necessary to determine the complete facets with ALL data
-  get_imbalance <- function(df) as.numeric(sub("\\*$", "", as.character(df["Imbalance_rate"])))
-
-  best_imbalance <- sort(unique(unlist(lapply(save_performance_validation, get_imbalance))), na.last = NA)
-
-  # best_imbalance <- save_performance_validation[[model_i]][, "Imbalance_rate"]
-
-  if (length(best_imbalance) == 1 & best_imbalance[1] == real_balance) {
-
-    datasets_all <- list(all_data)
-    real_balance <- round(prop.table(table(all_data$class_efficiency)), 4)
-    names(datasets_all)[1] <- paste0(as.character(round(real_balance, 4)),"*")
-
-  } else {
-
-    if(round(real_balance, 4) %in% best_imbalance) {
-
-      best_imbalance_SMOTE <- best_imbalance[which(round(real_balance, 4) != best_imbalance)]
-
-      datasets_all <- list(all_data)
-      real_balance <- round(prop.table(table(all_data$class_efficiency)), 4)[1]
-      names(datasets_all)[1] <- paste0(as.character(round(real_balance, 4)),"*")
-
-      if (as.character(RTS) %in% RTS_available) {
-
-        # determine complete facets
-        train_data_SMOTE <- SMOTE_data(
-          data = all_data,
-          x = x,
-          y = y,
-          RTS = RTS,
-          balance_data = best_imbalance_SMOTE,
-          seed = seed
-        )
-
-        datasets_all <- append(train_data_SMOTE, datasets_all, after = 0)
-
-      }
-
-    } else {
-
-      datasets_all <- list()
-      best_imbalance_SMOTE <- best_imbalance
-
-      if (as.character(RTS) %in% RTS_available) {
-
-        # determine complete facets
-        train_data_SMOTE <- SMOTE_data(
-          data = all_data,
-          x = x,
-          y = y,
-          RTS = RTS,
-          balance_data = best_imbalance_SMOTE,
-          seed = seed
-        )
-
-        datasets_all <- append(train_data_SMOTE, datasets_all)
-
-      }
-
-    }
-
-  }
-
-  # train with ALL data: best balance + hypeparameters
-  for (method_i in names(methods)) {
-
-    imbalance_rate_i <- save_performance_validation[[method_i]]$Imbalance_rate
-
-    if (grepl("\\*$", imbalance_rate_i)) {
-      imbalance_rate_i <- paste0(round(real_balance, 4), "*")
-    }
-
-    names_tuneGrid <- names(best_methods[[method_i]][["tuneGrid"]])
-
-    if (method_i != "glm") {
-      best_methods[[method_i]][["tuneGrid"]] <- save_performance_validation[[method_i]][names_tuneGrid]
-    }
-
-    model_fit <- train_PEAXAI(
-      data = datasets_all[[as.character(imbalance_rate_i)]],
-      method = method_i,
-      parameters = best_methods[[method_i]],
-      trControl = trainControl(method = "none", classProbs = TRUE),
-      metric_priority = metric_priority,
-      seed = seed
+    output_PEAXAI_models <- list(
+      best_model_fit = save_best_model_fit,
+      performance_train = save_performance_train,
+      performance_train_all = performance_train_all_by_method
+      # calibration_dataset = save_calibrations_dataset,
+      # calibration_model = save_calibration_model
     )
 
-    # actualize weights
-    if (method_i == "glm") {
+    return(output_PEAXAI_models)
 
-      parameters <- methods[["glm"]]
+  } else {
+    # validation output
 
-      if (parameters[["weights"]][1] == "dinamic") {
-        w0 <- nrow(datasets_all[[as.character(imbalance_rate_i)]]) / (2 * length(which(datasets_all[[as.character(imbalance_rate_i)]]$class_efficiency == "not_efficient")))
-        w1 <- nrow(datasets_all[[as.character(imbalance_rate_i)]]) / (2 * length(which(datasets_all[[as.character(imbalance_rate_i)]]$class_efficiency == "efficient")))
-      } else if (is.data.frame(parameters[["weights"]])) {
-        w0 <- parameters[["weights"]][["w0"]]
-        w1 <- parameters[["weights"]][["w1"]]
-      } else {
-        w0 <- 1
-        w1 <- 1
-      }
+    output_PEAXAI_models <- list(
+      best_model_fit = save_best_model_fit,
+      performace_hold_out = save_performance_validation,
+      performance_train = save_performance_train,
+      performance_train_all = performance_train_all_by_method
+      # calibration_dataset = save_calibrations_dataset,
+      # calibration_model = save_calibration_model
+    )
 
-      save_performance_validation[[method_i]]$w0 <- w0
-      save_performance_validation[[method_i]]$w1 <- w1
-
-    }
-
-    save_best_model_fit[[method_i]] <- model_fit
+    return(output_PEAXAI_models)
   }
-
-  if(null_calibration) {
-    calibration_model <- NULL
-  }
-
-  output_PEAXAI_models <- list(
-    best_model_fit = save_best_model_fit,
-    performance_validation = save_performance_validation,
-    performance_train = save_performance_train,
-    performance_train_all = performance_train_all_by_method,
-    calibration_model = save_calibration_model
-  )
-
-  return(output_PEAXAI_models)
+browser()
+  # # It is necessary to determine the complete facets with ALL data
+  # get_imbalance <- function(df) as.numeric(sub("\\*$", "", as.character(df["Imbalance_rate"])))
+  #
+  # best_imbalance <- sort(unique(unlist(lapply(save_performance_validation, get_imbalance))), na.last = NA)
+  #
+  # # best_imbalance <- save_performance_validation[[model_i]][, "Imbalance_rate"]
+  #
+  # if (length(best_imbalance) == 1 & best_imbalance[1] == real_balance) {
+  #
+  #   datasets_all <- list(all_data)
+  #   real_balance <- round(prop.table(table(all_data$class_efficiency)), 4)
+  #   names(datasets_all)[1] <- paste0(as.character(round(real_balance, 4)),"*")
+  #
+  # } else {
+  #
+  #   if(round(real_balance, 4) %in% best_imbalance) {
+  #
+  #     best_imbalance_SMOTE <- best_imbalance[which(round(real_balance, 4) != best_imbalance)]
+  #
+  #     datasets_all <- list(all_data)
+  #     real_balance <- round(prop.table(table(all_data$class_efficiency)), 4)[1]
+  #     names(datasets_all)[1] <- paste0(as.character(round(real_balance, 4)),"*")
+  #
+  #     if (as.character(RTS) %in% RTS_available) {
+  #
+  #       # determine complete facets
+  #       train_data_SMOTE <- SMOTE_data(
+  #         data = all_data,
+  #         x = x,
+  #         y = y,
+  #         RTS = RTS,
+  #         balance_data = best_imbalance_SMOTE,
+  #         seed = seed
+  #       )
+  #
+  #       datasets_all <- append(train_data_SMOTE, datasets_all, after = 0)
+  #
+  #     }
+  #
+  #   } else {
+  #
+  #     datasets_all <- list()
+  #     best_imbalance_SMOTE <- best_imbalance
+  #
+  #     if (as.character(RTS) %in% RTS_available) {
+  #
+  #       # determine complete facets
+  #       train_data_SMOTE <- SMOTE_data(
+  #         data = all_data,
+  #         x = x,
+  #         y = y,
+  #         RTS = RTS,
+  #         balance_data = best_imbalance_SMOTE,
+  #         seed = seed
+  #       )
+  #
+  #       datasets_all <- append(train_data_SMOTE, datasets_all)
+  #
+  #     }
+  #
+  #   }
+  #
+  # }
+  #
+  # # train with ALL data: best balance + hypeparameters
+  # for (method_i in names(methods)) {
+  #
+  #   imbalance_rate_i <- save_performance_validation[[method_i]]$Imbalance_rate
+  #
+  #   if (grepl("\\*$", imbalance_rate_i)) {
+  #     imbalance_rate_i <- paste0(round(real_balance, 4), "*")
+  #   }
+  #
+  #   names_tuneGrid <- names(best_methods[[method_i]][["tuneGrid"]])
+  #
+  #   if (method_i != "glm") {
+  #     best_methods[[method_i]][["tuneGrid"]] <- save_performance_validation[[method_i]][names_tuneGrid]
+  #   }
+  #
+  #   model_fit <- train_PEAXAI(
+  #     data = datasets_all[[as.character(imbalance_rate_i)]],
+  #     method = method_i,
+  #     parameters = best_methods[[method_i]],
+  #     trControl = trainControl(method = "none", classProbs = TRUE),
+  #     metric_priority = metric_priority,
+  #     seed = seed
+  #   )
+  #
+  #   # actualize weights
+  #   if (method_i == "glm") {
+  #
+  #     parameters <- methods[["glm"]]
+  #
+  #     if (parameters[["weights"]][1] == "dinamic") {
+  #       w0 <- nrow(datasets_all[[as.character(imbalance_rate_i)]]) / (2 * length(which(datasets_all[[as.character(imbalance_rate_i)]]$class_efficiency == "not_efficient")))
+  #       w1 <- nrow(datasets_all[[as.character(imbalance_rate_i)]]) / (2 * length(which(datasets_all[[as.character(imbalance_rate_i)]]$class_efficiency == "efficient")))
+  #     } else if (is.data.frame(parameters[["weights"]])) {
+  #       w0 <- parameters[["weights"]][["w0"]]
+  #       w1 <- parameters[["weights"]][["w1"]]
+  #     } else {
+  #       w0 <- 1
+  #       w1 <- 1
+  #     }
+  #
+  #     save_performance_validation[[method_i]]$w0 <- w0
+  #     save_performance_validation[[method_i]]$w1 <- w1
+  #
+  #   }
+  #
+  #   save_best_model_fit[[method_i]] <- model_fit
+  # }
+  #
+  # if(null_calibration) {
+  #   calibration_model <- NULL
+  # }
+  #
+  # output_PEAXAI_models <- list(
+  #   best_model_fit = save_best_model_fit,
+  #   performance_validation = save_performance_validation,
+  #   performance_train = save_performance_train,
+  #   performance_train_all = performance_train_all_by_method,
+  #   calibration_model = save_calibration_model
+  # )
+  #
+  # return(output_PEAXAI_models)
 
 }
