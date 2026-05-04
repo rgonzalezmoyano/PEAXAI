@@ -39,7 +39,7 @@ real and synthetic DMUs. It defines the reference distribution for perturbing fe
 \item{\code{measures}}{(SA) e.g. \code{"AAD"}, \code{"gradient"}, \code{"variance"}, \code{"range"}.}
 \item{\code{levels}}{(SA) Discretization levels used by \code{rminer::Importance}.}
 \item{\code{baseline}}{(SA) Baseline value for SA, if applicable. If omitted, the DMU itself is used as baseline.}
-\item{\code{nsim}}{(SHAP) Number of Monte Carlo samples for \code{fastshap::explain}.}
+\item{\code{bg_n}}{(SHAP) Background sample size for \code{kernelshap::kernelshap} (default: 200).}
 \item{\code{n_permutations}}{(LIME) Number of permutations per observation (default: 5000).}
 \item{\code{feature_select}}{(LIME) Feature selection method, e.g., \code{"auto"}, \code{"none"}, \code{"forward_selection"} (default: \code{"auto"}).}
 \item{\code{bin_continuous}}{(LIME) Logical indicating if continuous features should be binned (default: \code{TRUE}).}
@@ -59,7 +59,7 @@ fitted classification model that separates Pareto-efficient DMUs, using one of
 three XAI backends:
 \itemize{
 \item \code{"SA"} — Local Sensitivity Analysis via \pkg{rminer}.
-\item \code{"SHAP"} — Model-agnostic SHAP approximations via \pkg{fastshap}.
+\item \code{"SHAP"} — Model-agnostic SHAP approximations via \pkg{kernelshap}.
 \item \code{"LIME"} — Model-agnostic LIME approximations via \pkg{lime}
 }
 You can compute local importance on specific DMUs provided in \code{explain_data},
@@ -126,7 +126,7 @@ the DMU (using the chosen SA method/measure) and normalizes sensitivities per DM
   imp_local <- PEAXAI_local_importance(
     final_model = final_model, x = x, y = y,
     explain_data = data, reference_data = data,
-    importance_method = list(name = "SHAP", nsim = 100)
+    importance_method = list(name = "SHAP", bg_n = 200)
   )
 
   head(imp_local)
@@ -134,7 +134,7 @@ the DMU (using the chosen SA method/measure) and normalizes sensitivities per DM
 
 }
 \seealso{
-\code{\link[fastshap]{explain}},
+\code{\link[kernelshap]{kernelshap}},
 \code{\link[rminer]{Importance}},
 \code{\link[lime]{lime}}
 }

@@ -22,7 +22,6 @@
 #'   construct the directional vector, including:
 #'   \itemize{
 #'     \item \code{relative_importance}: Numeric vector of variable importances that sum to 1.
-#'     \item \code{scope}: \code{"global"} (currently supported) or \code{"local"}.
 #'     \item \code{baseline}: \code{"mean"}, \code{"median"}, \code{"self"} or \code{"ones"}.
 #'   }
 #' @param n_expand Numeric. Number of expansion steps used to enlarge the initial
@@ -101,7 +100,7 @@
 #'   efficiency_thresholds <- seq(0.75, 0.95, 0.1)
 #'
 #'   directional_vector <- list(relative_importance = relative_importance,
-#'   scope = "global", baseline  = "mean")
+#'   baseline  = "mean")
 #'
 #'   targets <- PEAXAI_targets(data = data, x = x, y = y, final_model = final_model,
 #'   efficiency_thresholds = efficiency_thresholds, directional_vector = directional_vector,
@@ -142,7 +141,9 @@ PEAXAI_counterfactuals <- function (
   # ----------------------------------------------------------------------------
   # Build vector G (directional vector) ----------------------------------------
   # ----------------------------------------------------------------------------
-  if (directional_vector[["scope"]] == "global") {
+  is_global <- is.null(nrow(directional_vector[["relative_importance"]])) || nrow(directional_vector[["relative_importance"]]) == 1
+
+  if (is_global) {
 
     # # relative importance
     # score_imp_x <- as.numeric(directional_vector[["relative_importance"]][x])
@@ -240,6 +241,10 @@ stop("Not available.")
     names(vector_gy) <- names_data[y]
 
   } else {
+
+    if (!is.null(nrow(directional_vector[["relative_importance"]])) && nrow(directional_vector[["relative_importance"]]) != nrow(data)) {
+      stop("Error: The number of rows in relative_importance must be 1 (global) or equal to the number of DMUs in data (local).")
+    }
 
     if (isTRUE(sign)) {
 
@@ -442,7 +447,7 @@ stop("Not available.")
         # Nombrar las columnas como en data original
         names(changes) <- names(data)
 
-        if(directional_vector[["baseline"]] != "self" & directional_vector[["scope"]] != "local") {
+        if(directional_vector[["baseline"]] != "self" & is_global) {
 
           change_x <- matrix(
             data = rep(as.numeric(vector_gx), each = nrow(changes)),

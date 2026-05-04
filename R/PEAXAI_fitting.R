@@ -592,6 +592,31 @@ PEAXAI_fitting <- function (
 
           # raw probabilities
           y_hat_prob <- predict(model_fit, newdata = test_set, type = "prob")[, 1]
+          if (all(is.na(y_hat_prob))) {
+            if (isTRUE(verbose)) {
+              warning("Predictions returned NA for method ", method_i, ". Generating NA performance for this configuration.")
+            }
+
+            performance_metrics_names <- c(
+              "Accuracy", "Kappa", "Recall", "Specificity",
+              "Precision", "F1", "Balanced_Accuracy",
+              "G_mean", "ROC_AUC", "PR_AUC",
+              "Cross_Entropy", "Cross_Entropy_Efficient_class",
+              "Cross_Entropy_not_Efficient_class"
+            )
+
+            performance_na <- as.data.frame(as.list(stats::setNames(rep(NA_real_, length(performance_metrics_names)), performance_metrics_names)))
+
+            performance <- cbind(
+              data.frame(method = method_i),
+              data.frame(Fold = fold_i),
+              new_parameters[["tuneGrid"]],
+              performance_na
+            )
+
+            performance_by_fold_by_grid[[method_i]][[datasets_to_train_i]][[grid_i]] <- performance
+            next
+          }
 
           # classifications
           y_hat <- ifelse(y_hat_prob > 0.5, "efficient", "not_efficient")
@@ -764,18 +789,28 @@ PEAXAI_fitting <- function (
 
         performance_fold <- bind_rows(results_fit[[method_i]][[balance_i]])
 
-        mean_fold <-  performance_fold %>%
-          summarise(
-            # mean
-            across(all_of(performance_metrics_names), ~mean(.x, na.rm = TRUE))
-          )
+        # me gustaría que si hay NAs en algún fold, sea todo NA la salida.
+        if (any(is.na(performance_fold[performance_metrics_names]))) {
 
-        sd_fold <- performance_fold %>%
-          summarise(
-            # SD
-            across(all_of(performance_metrics_names), ~sd(.x, na.rm = TRUE),
-                   .names = "{col}SD")
-          )
+          # Generar NA para todas las métricas y sus desviaciones estándar
+          mean_fold <- as.data.frame(as.list(stats::setNames(rep(NA_real_, length(performance_metrics_names)), performance_metrics_names)))
+          sd_fold <- as.data.frame(as.list(stats::setNames(rep(NA_real_, length(performance_metrics_names)), paste0(performance_metrics_names, "SD"))))
+
+        } else {
+
+          mean_fold <-  performance_fold %>%
+            summarise(
+              # mean
+              across(all_of(performance_metrics_names), ~mean(.x, na.rm = FALSE))
+            )
+
+          sd_fold <- performance_fold %>%
+            summarise(
+              # SD
+              across(all_of(performance_metrics_names), ~sd(.x, na.rm = FALSE),
+                     .names = "{col}SD")
+            )
+        }
 
         if (is.numeric(performace_tunGrid)) {
           performace_tunGrid <- as.data.frame(performace_tunGrid)
@@ -1075,9 +1110,9 @@ PEAXAI_fitting <- function (
       y_obs <- valid_data$class_efficiency
       y_obs_label <- ifelse(valid_data$class_efficiency == "efficient", 1, 0)
 
-      res <- val.prob(
-        p = y_hat_prob,
-        y = y_obs_label)
+      # res <- val.prob(
+      #   p = y_hat_prob,
+      #   y = y_obs_label)
 
       if (any(is.na(y_hat))) {
 
@@ -1173,7 +1208,7 @@ PEAXAI_fitting <- function (
           "PR_AUC" = unname(pr_obj$auc.integral),
           "Cross_Entropy" = cross_entropy,
           "Cross_Entropy_Efficient" = cross_entropy_efficient,
-          "Cross_Entropy_Efficient" = cross_entropy_not_efficient
+          "Cross_Entropy_not_Efficient" = cross_entropy_not_efficient
         )
 
         # save a copy
@@ -1257,7 +1292,6 @@ PEAXAI_fitting <- function (
       } else {
         all_data_SMOTE <- all_data
       }
-      browser()
 
       model_fit <- train_PEAXAI(
         data = all_data_SMOTE,

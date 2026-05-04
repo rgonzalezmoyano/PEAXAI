@@ -40,7 +40,7 @@ real and synthetic DMUs.}
 \item{\code{measures}}{(SA) e.g. \code{"AAD"}, \code{"gradient"}, \code{"variance"}, \code{"range"}.}
 \item{\code{levels}}{(SA) Discretization levels used by \code{rminer::Importance}.}
 \item{\code{baseline}}{(SA) Baseline value for SA, if applicable.}
-\item{\code{nsim}}{(SHAP) Number of Monte Carlo samples for \code{fastshap::explain}.}
+\item{\code{bg_n}}{(SHAP) Background sample size for \code{kernelshap::kernelshap} (default: 200).}
 \item{\code{n.repetitions}}{(PI) Number of permutations per feature for \code{iml::FeatureImp}.}
 }}
 
@@ -55,7 +55,7 @@ Computes \strong{global feature importance} for a fitted classification model th
 separates Pareto-efficient DMUs, using one of three XAI backends:
 \itemize{
 \item \code{"SA"} — Sensitivity Analysis via \pkg{rminer}.
-\item \code{"SHAP"} — Model-agnostic SHAP approximations via \pkg{fastshap}.
+\item \code{"SHAP"} — Model-agnostic SHAP approximations via \pkg{kernelshap}.
 \item \code{"PI"} — Permutation Importance via \pkg{iml}.
 }
 You can evaluate the model on either the training domain (\code{background = "train"})
@@ -120,6 +120,6 @@ For other models (e.g., \pkg{caret}), \code{predict(type = "prob")[, "efficient"
 
 }
 \seealso{
-\code{\link[fastshap]{explain}}, \code{\link[iml]{FeatureImp}},
+\code{\link[kernelshap]{kernelshap}}, \code{\link[iml]{FeatureImp}},
 \code{\link[rminer]{Importance}}
 }

@@ -5,7 +5,7 @@
 #' separates Pareto-efficient DMUs, using one of three XAI backends:
 #' \itemize{
 #'   \item \code{"SA"} — Sensitivity Analysis via \pkg{rminer}.
-#'   \item \code{"SHAP"} — Model-agnostic SHAP approximations via \pkg{fastshap}.
+#'   \item \code{"SHAP"} — Model-agnostic SHAP approximations via \pkg{kernelshap}.
 #'   \item \code{"PI"} — Permutation Importance via \pkg{iml}.
 #' }
 #' You can evaluate the model on either the training domain (\code{background = "train"})
@@ -33,7 +33,7 @@
 #'     \item{\code{measures}}{(SA) e.g. \code{"AAD"}, \code{"gradient"}, \code{"variance"}, \code{"range"}.}
 #'     \item{\code{levels}}{(SA) Discretization levels used by \code{rminer::Importance}.}
 #'     \item{\code{baseline}}{(SA) Baseline value for SA, if applicable.}
-#'     \item{\code{nsim}}{(SHAP) Number of Monte Carlo samples for \code{fastshap::explain}.}
+#'     \item{\code{bg_n}}{(SHAP) Background sample size for \code{kernelshap::kernelshap} (default: 200).}
 #'     \item{\code{n.repetitions}}{(PI) Number of permutations per feature for \code{iml::FeatureImp}.}
 #'   }
 #'
@@ -98,11 +98,11 @@
 #'   head(imp)
 #' }
 #'
-#' @seealso \code{\link[fastshap]{explain}}, \code{\link[iml]{FeatureImp}},
+#' @seealso \code{\link[kernelshap]{kernelshap}}, \code{\link[iml]{FeatureImp}},
 #'   \code{\link[rminer]{Importance}}
 #'
 #' @importFrom stats predict glm
-#' @importFrom fastshap explain
+#' @importFrom kernelshap kernelshap
 #' @importFrom iml FeatureImp Predictor
 #' @importFrom rminer Importance
 #' @importFrom pROC auc
@@ -182,10 +182,9 @@ PEAXAI_global_importance <- function(
     }
 
     # Define methods and measures
-    method <- importance_method[["method"]]  # c("1D-SA", "sens", "DSA", "MSA", "CSA", "GSA")
-    measure <- importance_method[["measures"]] #  c("AAD", "gradient", "variance", "range")
-
-    levels <- importance_method[["levels"]]
+    method <- if (!is.null(importance_method[["method"]])) importance_method[["method"]] else "1D-SA"
+    measure <- if (!is.null(importance_method[["measures"]])) importance_method[["measures"]] else "AAD"
+    levels <- if (!is.null(importance_method[["levels"]])) importance_method[["levels"]] else 7
 
     # matrix of data without label
     dataset_chosen <- target_data[, setdiff(names(target_data), "class_efficiency"), drop = FALSE]
@@ -229,18 +228,20 @@ PEAXAI_global_importance <- function(
     train_data  <- as.data.frame(train_data)
     target_data <- as.data.frame(target_data)
 
+    bg_n <- if (!is.null(importance_method[["bg_n"]])) importance_method[["bg_n"]] else 200
+
     #
-    shap_model <- fastshap::explain(
+    shap_model <- kernelshap::kernelshap(
       object = final_model,
-      X = train_data,
-      pred_wrapper = f_pred,
-      newdata = target_data,
-      nsim = importance_method[["nsim"]]
+      X = target_data,
+      bg_X = train_data,
+      pred_fun = f_pred,
+      bg_n = bg_n
     )
 
     # global importance = mean |SHAP| per variable
     imp <- t(data.frame(
-      importance = colMeans(abs(shap_model), na.rm = TRUE)
+      importance = colMeans(abs(shap_model$S), na.rm = TRUE)
     ))
 
     # Normalize for importance relative
@@ -303,12 +304,13 @@ PEAXAI_global_importance <- function(
     }
 
     # 6) Permutation Importance (repite permutaciones para estabilidad)
+    n_rep <- if (!is.null(importance_method[["n.repetitions"]])) importance_method[["n.repetitions"]] else 5
 
     fi <- iml::FeatureImp$new(
       predictor = pred_obj,
       loss = loss_auc,
       compare = "difference",      # caída de rendimiento vs. modelo completo
-      n.repetitions = importance_method[["n.repetitions"]] # sube si quieres más estabilidad
+      n.repetitions = n_rep # sube si quieres más estabilidad
     )
 
     order_names <- names(dataset_chosen)
@@ -350,7 +352,7 @@ PEAXAI_global_importance <- function(
 #' three XAI backends:
 #' \itemize{
 #'   \item \code{"SA"} — Local Sensitivity Analysis via \pkg{rminer}.
-#'   \item \code{"SHAP"} — Model-agnostic SHAP approximations via \pkg{fastshap}.
+#'   \item \code{"SHAP"} — Model-agnostic SHAP approximations via \pkg{kernelshap}.
 #'   \item \code{"LIME"} — Model-agnostic LIME approximations via \pkg{lime}
 #' }
 #' You can compute local importance on specific DMUs provided in \code{explain_data},
@@ -376,7 +378,7 @@ PEAXAI_global_importance <- function(
 #'     \item{\code{measures}}{(SA) e.g. \code{"AAD"}, \code{"gradient"}, \code{"variance"}, \code{"range"}.}
 #'     \item{\code{levels}}{(SA) Discretization levels used by \code{rminer::Importance}.}
 #'     \item{\code{baseline}}{(SA) Baseline value for SA, if applicable. If omitted, the DMU itself is used as baseline.}
-#'     \item{\code{nsim}}{(SHAP) Number of Monte Carlo samples for \code{fastshap::explain}.}
+#'     \item{\code{bg_n}}{(SHAP) Background sample size for \code{kernelshap::kernelshap} (default: 200).}
 #'     \item{\code{n_permutations}}{(LIME) Number of permutations per observation (default: 5000).}
 #'     \item{\code{feature_select}}{(LIME) Feature selection method, e.g., \code{"auto"}, \code{"none"}, \code{"forward_selection"} (default: \code{"auto"}).}
 #'     \item{\code{bin_continuous}}{(LIME) Logical indicating if continuous features should be binned (default: \code{TRUE}).}
@@ -449,18 +451,18 @@ PEAXAI_global_importance <- function(
 #'   imp_local <- PEAXAI_local_importance(
 #'     final_model = final_model, x = x, y = y,
 #'     explain_data = data, reference_data = data,
-#'     importance_method = list(name = "SHAP", nsim = 100)
+#'     importance_method = list(name = "SHAP", bg_n = 200)
 #'   )
 #'
 #'   head(imp_local)
 #' }
 #'
-#' @seealso \code{\link[fastshap]{explain}},
+#' @seealso \code{\link[kernelshap]{kernelshap}},
 #'   \code{\link[rminer]{Importance}},
 #'   \code{\link[lime]{lime}}
 #'
 #' @importFrom stats predict glm
-#' @importFrom fastshap explain
+#' @importFrom kernelshap kernelshap
 #' @importFrom rminer Importance
 #' @importFrom pROC auc
 #' @importFrom lime lime
@@ -525,10 +527,9 @@ PEAXAI_local_importance <- function(
     }
 
     # Define methods and measures
-    method <- importance_method[["method"]]  # c("1D-SA", "sens", "DSA", "MSA", "CSA", "GSA")
-    measure <- importance_method[["measures"]] #  c("AAD", "gradient", "variance", "range")
-
-    levels <- importance_method[["levels"]]
+    method <- if (!is.null(importance_method[["method"]])) importance_method[["method"]] else "1D-SA"
+    measure <- if (!is.null(importance_method[["measures"]])) importance_method[["measures"]] else "variance"
+    levels <- if (!is.null(importance_method[["levels"]])) importance_method[["levels"]] else 5
 
     # matrix of data without label
     dataset_chosen <- target_data[, setdiff(names(target_data), "class_efficiency"), drop = FALSE]
@@ -574,18 +575,20 @@ PEAXAI_local_importance <- function(
 
     }
 
+    bg_n <- if (!is.null(importance_method[["bg_n"]])) importance_method[["bg_n"]] else 200
+
     #
-    shap_model <- explain(
+    shap_model <- kernelshap::kernelshap(
       object = final_model,
-      X = train_data,
-      pred_wrapper = f_pred,
-      newdata = target_data,
-      nsim = importance_method[["nsim"]]
+      X = target_data,
+      bg_X = train_data,
+      pred_fun = f_pred,
+      bg_n = bg_n
     )
 
-    # global importance = mean |SHAP| per variable
+    # local importance = SHAP per variable
     imp <- data.frame(
-      importance = shap_model
+      importance = shap_model$S
     )
     names(imp) <- names(train_data)
 

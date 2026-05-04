@@ -51,7 +51,7 @@ Imports:
   cluster,
   deaR,
   dplyr,
-  fastshap,
+  kernelshap,
   iml,
   isotone,
   lpSolve,
