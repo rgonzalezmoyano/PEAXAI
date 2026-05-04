@@ -40,7 +40,6 @@ that define the efficiency classes (e.g., \code{c(0.75, 0.9, 0.95)}).}
 construct the directional vector, including:
 \itemize{
 \item \code{relative_importance}: Numeric vector of variable importances that sum to 1.
-\item \code{scope}: \code{"global"} (currently supported) or \code{"local"}.
 \item \code{baseline}: \code{"mean"}, \code{"median"}, \code{"self"} or \code{"ones"}.
 }}
 
@@ -127,7 +126,7 @@ the predicted probability of belonging to the efficient class reaches the target
   efficiency_thresholds <- seq(0.75, 0.95, 0.1)
 
   directional_vector <- list(relative_importance = relative_importance,
-  scope = "global", baseline  = "mean")
+  baseline  = "mean")
 
   targets <- PEAXAI_targets(data = data, x = x, y = y, final_model = final_model,
   efficiency_thresholds = efficiency_thresholds, directional_vector = directional_vector,
