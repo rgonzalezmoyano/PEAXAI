@@ -1186,7 +1186,12 @@ PEAXAI_fitting <- function (
           y_bin * log(p_clipped) + (1 - y_bin) * log(1 - p_clipped)
         )
 
+        #
         # cross entropy NOT efficient class
+        # cross_entropy
+        y_bin <- ifelse(y_obs == "efficient", 1, 0)
+        p <- y_hat_prob
+
         p <- y_hat_prob[y_bin == 0]
         y_bin <- y_bin[y_bin == 0]
 
