@@ -72,14 +72,35 @@ label_efficiency <- function (
   )
 
   if (is.null(z_numeric) & is.null(z_factor)) {
+
+    #
+    tol = 1e-9
+    X <- as.matrix(data[,x])
+    Y <- as.matrix(data[,y])
+
+    Z <- cbind(-X, Y)
+    n <- nrow(Z)
+
+    pareto <- rep(TRUE, n)
+
+    for (k in seq_len(n)) {
+      # En Z = [-X, Y], dominar significa ser >= componente a componente
+      weak_dom <- rowSums(Z >= matrix(Z[k, ], n, ncol(Z), byrow = TRUE) - tol) == ncol(Z)
+      strict_dom <- rowSums(Z > matrix(Z[k, ], n, ncol(Z), byrow = TRUE) + tol) > 0
+
+      pareto[k] <- !any(weak_dom & strict_dom)
+    }
+
+    pareto
+    #
     # the additive DEA
 
     # benchmarking to calculate additive-DEA
     add_scores <- dea.add(
       X = as.matrix(data[,x]),
       Y = as.matrix(data[,y]),
-      XREF = as.matrix(REF[,x]),
-      YREF = as.matrix(REF[,y]),
+      XREF = as.matrix(REF[pareto,x]),
+      YREF = as.matrix(REF[pareto,y]),
       RTS = RTS
     )[["sum"]]
 
@@ -96,8 +117,6 @@ label_efficiency <- function (
       data$class_efficiency == 1, "efficient", "not_efficient")
 
     # create the 'class_efficiency' in a factor
-    data$class_efficiency <- factor(data$class_efficiency)
-
     # order of levels
     data$class_efficiency <- factor(
       data$class_efficiency,
@@ -190,7 +209,12 @@ label_efficiency <- function (
           #select m random units
           m_sample <- sample(n_sample, round(m,0), prob = similarity_Rob, replace = TRUE)
           Y_ref <- as.data.frame(Y_Rob[m_sample,])
+          Y_ref <- unique(Y_ref)
+
           X_ref <- as.data.frame(X_Rob[m_sample,])
+          X_ref <-unique(X_ref)
+
+          REF <- cbind(X_ref, Y_ref)
 
           # compute the DEA for unit i
           # DEA_B[j] <- Benchmarking::dea(
@@ -203,10 +227,10 @@ label_efficiency <- function (
           #   YREF = Y_ref)$eff
 
           DEA_B[j] <- dea.add(
-            X = as.matrix(data[i,x]),
-            Y = as.matrix(data[i,y]),
-            XREF = as.matrix(X_ref[,x]),
-            YREF = as.matrix(Y_ref[,y]),
+            X = as.matrix(data[i,x, drop = FALSE]),
+            Y = as.matrix(data[i,y, drop = FALSE]),
+            XREF = as.matrix(REF[,x, drop = FALSE]),
+            YREF = as.matrix(REF[,y, drop = FALSE]),
             RTS = RTS
           )[["sum"]]
 

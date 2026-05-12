@@ -483,7 +483,7 @@ PEAXAI_fitting <- function (
       z_factor = z_factor,
       RTS = RTS,
       B = B,
-      m = nrow(train_set)^(2/3),
+      m = round(nrow(train_set)^(2/3)),
       bandwidth = NULL,
       alpha = alpha,
       seed = seed
