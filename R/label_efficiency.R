@@ -60,7 +60,7 @@
 
 label_efficiency <- function (
     data, REF = data, x, y, z_numeric = NULL, z_factor = NULL, RTS = "vrs",
-    B = 200, alpha = FALSE, m = NULL, bandwidth = NULL, seed
+    B = 1, alpha = FALSE, m = NULL, bandwidth = NULL, seed
   ) {
 
   # check if parameters are well introduced
@@ -206,15 +206,19 @@ label_efficiency <- function (
       }
       else {
         for (j in 1:B) {
+
+          idx_eff_z <- which(round(similarity_Rob/similarity_Rob[i], 4) > 0)
+
           #select m random units
-          m_sample <- sample(n_sample, round(m,0), prob = similarity_Rob, replace = TRUE)
-          Y_ref <- as.data.frame(Y_Rob[m_sample,])
+          # m_sample <- sample(n_sample, round(m,0), prob = similarity_Rob, replace = TRUE)
+          m_sample <- idx_eff_z
+          Y_ref <- as.data.frame(Y_Rob[m_sample,, drop = FALSE])
           Y_ref <- unique(Y_ref)
 
-          X_ref <- as.data.frame(X_Rob[m_sample,])
-          X_ref <-unique(X_ref)
+          X_ref <- as.data.frame(X_Rob[m_sample,, drop = FALSE])
+          X_ref <- unique(X_ref)
 
-          REF <- cbind(X_ref, Y_ref)
+          # REF <- cbind(X_ref, Y_ref)
 
           # compute the DEA for unit i
           # DEA_B[j] <- Benchmarking::dea(
@@ -229,8 +233,8 @@ label_efficiency <- function (
           DEA_B[j] <- dea.add(
             X = as.matrix(data[i,x, drop = FALSE]),
             Y = as.matrix(data[i,y, drop = FALSE]),
-            XREF = as.matrix(REF[,x, drop = FALSE]),
-            YREF = as.matrix(REF[,y, drop = FALSE]),
+            XREF = as.matrix(X_ref, drop = FALSE),
+            YREF = as.matrix(Y_ref, drop = FALSE),
             RTS = RTS
           )[["sum"]]
 

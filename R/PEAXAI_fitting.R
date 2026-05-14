@@ -271,7 +271,7 @@ PEAXAI_fitting <- function (
       list = FALSE)
 
     # split data
-    valid_data <- data[valid_index, c(x,y)]
+    valid_data <- data[valid_index, c(x,y, z_numeric, z_factor)]
 
     valid_data <- cbind(
       valid_data,
@@ -280,7 +280,7 @@ PEAXAI_fitting <- function (
       )
     )
 
-    train_data <- data[-valid_index, c(x,y)]
+    train_data <- data[-valid_index, c(x,y, z_numeric, z_factor)]
 
     if (isTRUE(verbose)) {
       message(
