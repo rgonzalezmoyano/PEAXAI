@@ -16,6 +16,7 @@
 #' @param calibration_model Optional probability-calibration model applied to the raw predicted probabilities from \code{final_model} (e.g., Platt scaling or isotonic regression).
 #' If provided, calibrated probabilities are used for ranking and threshold-based decisions.
 #' Set to \code{NULL} to use uncalibrated predictions.
+#' @param sign If it is TRUE, only
 #' @param efficiency_thresholds A numeric vector of probability levels in (0,1)
 #'   that define the efficiency classes (e.g., \code{c(0.75, 0.9, 0.95)}).
 #' @param directional_vector A \code{list} with the required information to

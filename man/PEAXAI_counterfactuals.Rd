@@ -33,6 +33,8 @@ PEAXAI_counterfactuals(
 If provided, calibrated probabilities are used for ranking and threshold-based decisions.
 Set to \code{NULL} to use uncalibrated predictions.}
 
+\item{sign}{If it is TRUE, only}
+
 \item{efficiency_thresholds}{A numeric vector of probability levels in (0,1)
 that define the efficiency classes (e.g., \code{c(0.75, 0.9, 0.95)}).}
 
