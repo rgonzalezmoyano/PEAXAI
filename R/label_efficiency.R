@@ -166,39 +166,42 @@ label_efficiency <- function (
         tdat = data[i,exogenous, drop = FALSE],
         edat = data[,exogenous, drop = FALSE])
 
-      similarity_i <- cbind(kerz$dens)
+      similarity_i <- as.numeric(kerz$dens)
+      sim_target <- similarity_i[i] # Similitud de la unidad i consigo misma
 
       # consider only the units that perform at least as good as unit i
       y_i <- data[i, y]
       x_i <- data[i, x]
       Y_Rob <- data[, y]
       X_Rob <- data[, x]
-      similarity_Rob <- similarity_i
 
-      # mod
-      # Nueva condición: combinación de filtros input y output (dominancia fuerte)
+      # Filtro 1: Similitud (al menos 0.01 de similitud respecto a la unidad i)
+      cond_sim <- (similarity_i / sim_target) >= 0.01
+
+      # Filtro 2: Dominancia fuerte (menor o igual input, mayor o igual output)
       cond_output <- matrix(TRUE, nrow = nrow(Y_Rob), ncol = k)
-
       for (l in 1:k) {
         cond_output[, l] <- Y_Rob[, l] >= as.numeric(y_i[l])
       }
 
       cond_input <- matrix(TRUE, nrow = nrow(X_Rob), ncol = s)
-
       for (l in 1:s) {
         cond_input[, l] <- X_Rob[, l] <= as.numeric(x_i[l])
       }
 
-      # Intersección lógica: dominan en todos los outputs y usan menos inputs
-      combined_filter <- apply(cond_output, 1, all) & apply(cond_input, 1, all)
+      cond_dom <- apply(cond_output, 1, all) & apply(cond_input, 1, all)
 
-      # Aplicar el filtro simultáneamente a todas las matrices
-      similarity_Rob <- similarity_Rob[combined_filter]
-      X_Rob <- as.data.frame(X_Rob[combined_filter,])
-      Y_Rob <- as.data.frame(Y_Rob[combined_filter,])
-      # mod
+      # Intersección lógica: cumplen ambas condiciones a la vez
+      combined_filter <- cond_sim & cond_dom
 
-      n_sample <- nrow(Y_Rob) #(equivalent to nrow(Y_Rob))
+      # Aplicar ambos filtros a la vez para construir las matrices de referencia
+      Y_ref <- as.data.frame(Y_Rob[combined_filter, , drop = FALSE])
+      Y_ref <- unique(Y_ref)
+
+      X_ref <- as.data.frame(X_Rob[combined_filter, , drop = FALSE])
+      X_ref <- unique(X_ref)
+
+      n_sample <- nrow(X_ref) #(equivalent to nrow(Y_Rob))
 
       #pick a sample of random unit in the reference set if there are at least 2 units in the ref
       if (n_sample < 2) {
@@ -206,17 +209,6 @@ label_efficiency <- function (
       }
       else {
         for (j in 1:B) {
-
-          idx_eff_z <- which(round(similarity_Rob/similarity_Rob[i], 4) > 0)
-
-          #select m random units
-          # m_sample <- sample(n_sample, round(m,0), prob = similarity_Rob, replace = TRUE)
-          m_sample <- idx_eff_z
-          Y_ref <- as.data.frame(Y_Rob[m_sample,, drop = FALSE])
-          Y_ref <- unique(Y_ref)
-
-          X_ref <- as.data.frame(X_Rob[m_sample,, drop = FALSE])
-          X_ref <- unique(X_ref)
 
           # REF <- cbind(X_ref, Y_ref)
 
@@ -238,6 +230,22 @@ label_efficiency <- function (
             RTS = RTS
           )[["sum"]]
 
+          # DEA_B[j] <- tryCatch({
+          #   # Intenta ejecutar la función normalmente
+          #   dea.add(
+          #     X = as.matrix(data[i, x, drop = FALSE]),
+          #     Y = as.matrix(data[i, y, drop = FALSE]),
+          #     XREF = as.matrix(X_ref, drop = FALSE),
+          #     YREF = as.matrix(Y_ref, drop = FALSE),
+          #     RTS = RTS
+          #   )[["sum"]]
+          # }, error = function(e) {
+          #   # Si hay error, imprime el mensaje y lanza el browser
+          #   message("Se detectó un error en la iteración: ", j)
+          #   print(e)
+          #   browser()
+          #   browser()
+          # })
         }
 
         eff[i] <- mean(DEA_B[DEA_B != -Inf & DEA_B != Inf])
