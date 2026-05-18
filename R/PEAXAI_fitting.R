@@ -238,7 +238,7 @@ PEAXAI_fitting <- function (
     info_imb_rate <- round(prop.table(table(data$class_efficiency))[1], 4) * 100
     message(
       sprintf(
-        'The minority class, labeled as "efficient", represents %.2f%% of the dataset.',
+        'The "efficient" class represents %.2f%% of the dataset.',
         info_imb_rate
       )
     )
