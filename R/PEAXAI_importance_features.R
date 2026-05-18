@@ -90,8 +90,9 @@
 #'   final_model <- models[["best_model_fit"]][["glm"]]
 #'
 #'   imp <- PEAXAI_global_importance(
-#'     final_model = final_model, x = x, y = y,
-#'     explain_data = data, reference_data = data,
+#'     data = data, x = x, y = y,
+#'     final_model = final_model,
+#'     background = "real", target = "real",
 #'     importance_method = list(name = "PI", n.repetitions = 5)
 #'   )
 #'

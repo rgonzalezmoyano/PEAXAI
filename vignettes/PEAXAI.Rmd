@@ -137,7 +137,7 @@ trControl <- list(
 
 Classification metrics to optimize during training (priority order in case of ties)
 ```{r}
-metric_priority <- c("Balanced_Accuracy", "Precision")
+metric_priority <- c("Balanced_Accuracy", "F1", "ROC_AUC")
 ```
 
 Define hold-out sample to evaluate model performance on unseen data. These samples are excluded from the cross-validation and hyperparameter tuning process. By default, is `NULL`.
@@ -169,7 +169,6 @@ models <- PEAXAI_fitting(
   methods = methods,
   trControl = trControl,
   metric_priority = metric_priority,
-  calibration_method = NULL,
   hold_out = hold_out,
   verbose = TRUE,
   seed = seed
@@ -204,12 +203,11 @@ If `target` = `real`, relative importances are computed on a dataset intended to
 
 ```{r}
 relative_importance <- PEAXAI_global_importance(
-  data = data,
+  final_model = models[["best_model_fit"]][["nnet"]],
   x = x,
   y = y,
-  final_model = models[["best_model_fit"]][["nnet"]],
-  background = "train",
-  target = "train",
+  explain_data = data,
+  reference_data = data,
   importance_method = importance_method
 )
 ```
@@ -231,8 +229,6 @@ We define a global, model-aware direction for improving inputs/outputs.
 
 `scope` = `global` applies a single direction to all DMUs.
 
-`baseline` = `mean` centers perturbations around the training mean.
-
 The argument `relative_importance` is the direction to make the counterfactual analysis. The directional vector can be custom or provided by PEAXAI_global_importance funtion.
 
 For example, if the directional vector is custom:
@@ -253,7 +249,6 @@ But, if we do not know which direction define, we can use the relative importace
 ```{r}
 directional_vector <- list(
   relative_importance = relative_importance,
-  scope = "global",
   baseline  = "mean"        
 )
 ```
@@ -269,7 +264,7 @@ Key controls:
 `max_y` = 2, `min_x` = 1: bounds that cap output expansion and input contraction.
 
 ```{r}
-targets <- PEAXAI_targets(
+targets <- PEAXAI_counterfactuals(
   data = data,
   x = x,
   y = y,
@@ -348,4 +343,3 @@ peers <- PEAXAI_peer(
 ```{r}
 head(peers, 50)
 ```
-

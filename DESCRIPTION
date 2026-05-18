@@ -55,17 +55,19 @@ Imports:
   iml,
   isotone,
   lpSolve,
+  lime,
   np,
   PRROC,
   pROC,
   rminer,
+  Rdpack,
   rms,
+  truncnorm,
   stats
 Suggests:
   ggplot2,
   knitr,
-  rmarkdown,
-  nnet
+  rmarkdown
 VignetteBuilder: knitr
 LazyData: false
 ByteCompile: true
