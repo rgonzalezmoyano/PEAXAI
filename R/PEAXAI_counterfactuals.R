@@ -230,15 +230,22 @@ stop("Not available.")
     # names(vector_gy) <- names_data[y]
 
     # directional vector
-    if (nrow(v_final) > 1) {
+    if (!is.null(nrow(v_final)) && nrow(v_final) > 1) {
       v_final <- t(v_final)
+    }
+    
+    if (is.null(dim(v_final))) {
+      v_final <- as.data.frame(t(v_final))
+    } else {
+      v_final <- as.data.frame(v_final)
     }
 
     # directional vector
-    vector_gx <- as.data.frame(t(v_final[,x]))
+    vector_gx <- v_final[, x, drop = FALSE]
     names(vector_gx) <- names_data[x]
     vector_gx <- -vector_gx
-    vector_gy <- as.data.frame(t(v_final[,y]))
+    
+    vector_gy <- v_final[, y, drop = FALSE]
     names(vector_gy) <- names_data[y]
 
   } else {
@@ -345,7 +352,7 @@ stop("Not available.")
     }
 
     # directional vector
-    vector_gx <- as.data.frame(v_final[,x])
+    vector_gx <- as.data.frame(v_final[, x, drop = FALSE])
     names(vector_gx) <- names_data[x]
     vector_gx[is.na(vector_gx)] <- 0
 
@@ -353,7 +360,7 @@ stop("Not available.")
       vector_gx <- -vector_gx
     }
 
-    vector_gy <- as.data.frame(v_final[,y])
+    vector_gy <- as.data.frame(v_final[, y, drop = FALSE])
     names(vector_gy) <- names_data[y]
     vector_gy[is.na(vector_gy)] <- 0
 
