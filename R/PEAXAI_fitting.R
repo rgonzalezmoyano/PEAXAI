@@ -334,67 +334,16 @@ PEAXAI_fitting <- function (
   datasets_to_train[[1]] <- train_data
   names(datasets_to_train)[1] <- paste0(as.character(round(real_balance, 4)),"*")
 
-  names(datasets_to_train)[2:length(datasets_to_train)] <- as.character(imbalance_rate)
+  if(!is.null(imbalance_rate)) {
+    names(datasets_to_train)[2:length(datasets_to_train)] <- as.character(imbalance_rate)
+  }
 
   real_balance_stable <- paste0(as.character(round(real_balance, 4)),"*")
 
-  # ----------------------------------------------------------------------------
-  # Step 3.1: Addressing imbalance rate (if there is convexity) ----------------
-  # ----------------------------------------------------------------------------
   RTS_available <- c("1", "vrs")
 
-  # if (!is.null(imbalance_rate)) {
-  #
-  #   if (as.character(RTS) %in% RTS_available) {
-  #
-  #     if (is.null(z_numeric) & is.null(z_numeric)) {
-  #
-  #       # create new datasets addressing imbalance
-  #       train_data_SMOTE <- SMOTE_data(
-  #         data = train_data,
-  #         x = x,
-  #         y = y,
-  #         RTS = RTS,
-  #         balance_data = imbalance_rate,
-  #         seed = seed
-  #       )
-  #
-  #     } else {
-  #
-  #       # create new datasets addressing imbalance
-  #       train_data_SMOTE <- SMOTE_Z_data(
-  #         data = train_data,
-  #         x = x,
-  #         y = y,
-  #         z_numeric = z_numeric,
-  #         z_factor = z_factor,
-  #         balance_data = imbalance_rate,
-  #         RTS = RTS,
-  #         B = B,
-  #         m = m,
-  #         alpha = alpha,
-  #         bandwidth = bandwidth,
-  #         seed = seed
-  #       )
-  #
-  #     }
-  #
-  #     datasets_to_train_FINAL <- append(train_data_SMOTE, datasets_to_train, after = 0)
-  #
-  #   } else {
-  #     message(
-  #       "Without the convexity assumption, SMOTE units cannot be created on the efficient frontier."
-  #     )
-  #
-  #   }
-  #
-  # } else {
-  #
-  #   datasets_to_train_FINAL <- datasets_to_train
-  # }
-
   # ----------------------------------------------------------------------------
-  # Step 3.2: Train performance with different hyperparameters -----------------
+  # Step 3.1: Train performance with different hyperparameters -----------------
   # ----------------------------------------------------------------------------
   # save model
   best_models <- vector("list", length(methods))
@@ -411,13 +360,6 @@ PEAXAI_fitting <- function (
   # only the best by imbalance and ML method
   best_performance_train_all_by_dataset <- vector("list", length(datasets_to_train))
   names(best_performance_train_all_by_dataset) <- names(datasets_to_train)
-
-  # calibrating test
-  # calibrating_datasets <- vector("list", length(datasets_to_train))
-  # names(calibrating_datasets) <- names(datasets_to_train)
-
-  # save_calibrations_dataset <- vector("list", length(methods))
-  # names(save_calibrations_dataset) <- names(save_calibrations_dataset)
 
   # metrics evaluation
   metric <- metric_priority[1]
@@ -439,13 +381,6 @@ PEAXAI_fitting <- function (
 
   test_idx_by_fold <- vector("list", length(folds))
   names(test_idx_by_fold) <- names(folds)
-
-  # # calibration datasets (global; do NOT reinitialize inside folds)
-  # calibrating_datasets_by_method <- vector("list", length(methods))
-  # names(calibrating_datasets_by_method) <- names(methods)
-  #
-  # save_calibration_model <- vector("list", length(methods))
-  # names(save_calibration_model) <- names(methods)
 
   # cross validation
   if (isTRUE(verbose)) {
@@ -540,7 +475,14 @@ PEAXAI_fitting <- function (
       } else {
         message("Without the convexity assumption, SMOTE units cannot be created on the efficient frontier.")
       }
-    } # end balancing fold_i
+
+      # end balancing fold_i
+
+    } else {
+      datasets_to_train_fold_i <- vector("list", length = 1)
+      datasets_to_train_fold_i[[1]] <- train_set
+      names(datasets_to_train_fold_i)[1] <- real_balance_stable
+    }
 
     # Train and get performance
     performance_train_all_by_method <- vector("list", length(methods))
