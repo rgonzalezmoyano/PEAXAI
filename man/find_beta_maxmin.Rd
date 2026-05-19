@@ -55,7 +55,7 @@ A \code{data.frame} with two numeric columns:
 \description{
 Estimates, for each observation, the minimum and maximum feasible values of the
 directional distance parameter \eqn{\beta} used in projection-based efficiency
-analysis. This function is an internal step of \code{\link{PEAXAI_targets}},
+analysis. This function is an internal step of \code{\link{PEAXAI_counterfactuals}},
 providing the initial search bounds for the iterative determination of efficiency targets.
 }
 \details{
@@ -63,9 +63,9 @@ For each DMU, the function expands outputs and contracts inputs along the specif
 direction until the predicted probability of efficiency (from \code{final_model})
 reaches the maximum in \code{efficiency_thresholds} or feasible domain limits.
 The resulting interval \eqn{[\beta_{\min}, \beta_{\max}]} is then used by
-\code{\link{PEAXAI_targets}} to refine projections via grid search.
+\code{\link{PEAXAI_counterfactuals}} to refine projections via grid search.
 }
 \seealso{
-\code{\link{PEAXAI_targets}} (efficiency projections based on \eqn{\beta});
+\code{\link{PEAXAI_counterfactuals}} (efficiency projections based on \eqn{\beta});
 \code{\link[caret]{train}} (model training with class probabilities).
 }

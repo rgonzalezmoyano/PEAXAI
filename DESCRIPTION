@@ -48,21 +48,17 @@ Depends:
 Imports:
   Benchmarking,
   caret,
-  cluster,
   deaR,
   dplyr,
   kernelshap,
   iml,
   isotone,
-  lpSolve,
   lime,
   np,
   PRROC,
   pROC,
   rminer,
-  Rdpack,
   rms,
-  truncnorm,
   stats
 Suggests:
   ggplot2,

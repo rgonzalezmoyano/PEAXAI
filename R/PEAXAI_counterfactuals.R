@@ -75,9 +75,9 @@
 #'     "glm" = list(
 #'       weights = "dinamic"
 #'      )
-#'    )
+#'   )
 #'
-#'   metric_priority <- c("Balanced_Accuracy", "ROC_AUC")
+#'   metric_priority <- c("Balanced_Accuracy", "F1", "ROC_AUC")
 #'
 #'   models <- PEAXAI_fitting(
 #'     data = data, x = x, y = y, RTS = RTS,
@@ -91,21 +91,33 @@
 #'
 #'   final_model <- models[["best_model_fit"]][["glm"]]
 #'
+#'   importance_method <- list(name = "PI", n.repetitions = 5)
+#'
 #'   relative_importance <- PEAXAI_global_importance(
-#'     data = data, x = x, y = y,
 #'     final_model = final_model,
-#'     background = "real", target = "real",
-#'     importance_method = list(name = "PI", n.repetitions = 5)
+#'     x = x,
+#'     y = y,
+#'     explain_data = data,
+#'     reference_data = final_model$trainingData,
+#'     importance_method = importance_method,
+#'     seed = 1
 #'   )
 #'
 #'   efficiency_thresholds <- seq(0.75, 0.95, 0.1)
 #'
-#'   directional_vector <- list(relative_importance = relative_importance,
-#'   baseline  = "mean")
+#'   directional_vector <- list(
+#'     relative_importance = relative_importance,
+#'     baseline  = "mean"
+#'   )
 #'
-#'   targets <- PEAXAI_targets(data = data, x = x, y = y, final_model = final_model,
-#'   efficiency_thresholds = efficiency_thresholds, directional_vector = directional_vector,
-#'   n_expand = 0.5, n_grid = 50, max_y = 2, min_x = 1)
+#'   targets <- PEAXAI_counterfactuals(
+#'     data = data,
+#'     x = x, y = y,
+#'     final_model = final_model,
+#'     efficiency_thresholds = efficiency_thresholds,
+#'     directional_vector = directional_vector,
+#'     n_expand = 0.5, n_grid = 50, max_y = 2, min_x = 1
+#'   )
 #' }
 #'
 #' @export
@@ -233,7 +245,7 @@ stop("Not available.")
     if (!is.null(nrow(v_final)) && nrow(v_final) > 1) {
       v_final <- t(v_final)
     }
-    
+
     if (is.null(dim(v_final))) {
       v_final <- as.data.frame(t(v_final))
     } else {
@@ -244,7 +256,7 @@ stop("Not available.")
     vector_gx <- v_final[, x, drop = FALSE]
     names(vector_gx) <- names_data[x]
     vector_gx <- -vector_gx
-    
+
     vector_gy <- v_final[, y, drop = FALSE]
     names(vector_gy) <- names_data[y]
 
@@ -732,7 +744,7 @@ stop("Not available.")
 #' @description
 #' Estimates, for each observation, the minimum and maximum feasible values of the
 #' directional distance parameter \eqn{\beta} used in projection-based efficiency
-#' analysis. This function is an internal step of \code{\link{PEAXAI_targets}},
+#' analysis. This function is an internal step of \code{\link{PEAXAI_counterfactuals}},
 #' providing the initial search bounds for the iterative determination of efficiency targets.
 #'
 #' @param data A \code{data.frame} or \code{matrix} containing input and output variables.
@@ -756,7 +768,7 @@ stop("Not available.")
 #' direction until the predicted probability of efficiency (from \code{final_model})
 #' reaches the maximum in \code{efficiency_thresholds} or feasible domain limits.
 #' The resulting interval \eqn{[\beta_{\min}, \beta_{\max}]} is then used by
-#' \code{\link{PEAXAI_targets}} to refine projections via grid search.
+#' \code{\link{PEAXAI_counterfactuals}} to refine projections via grid search.
 #'
 #' @return
 #' A \code{data.frame} with two numeric columns:
@@ -766,10 +778,8 @@ stop("Not available.")
 #' }
 #'
 #' @seealso
-#' \code{\link{PEAXAI_targets}} (efficiency projections based on \eqn{\beta});
+#' \code{\link{PEAXAI_counterfactuals}} (efficiency projections based on \eqn{\beta});
 #' \code{\link[caret]{train}} (model training with class probabilities).
-#'
-#' @importFrom cluster daisy
 #'
 #' @export
 #'

@@ -26,6 +26,10 @@ SMOTE_Z_data(
 
 \item{y}{Column indexes of the output variables in the \code{data}.}
 
+\item{z_numeric}{Integer vector with column indices of numeric environment variables in \code{data}. By default is \code{NULL}.}
+
+\item{z_factor}{Integer vector with column indices of factor environment variables in \code{data}. By default is \code{NULL}.}
+
 \item{balance_data}{Indicate level of efficient units to achive and the number of efficient and not efficient units.}
 
 \item{RTS}{Text string or number defining the underlying DEA technology /
@@ -39,9 +43,15 @@ returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 \item{\code{5} / \code{"add"}}{Additivity (scaling up and down, but only with integers), and free disposability.}
 }}
 
-\item{seed}{Integer. Seed for reproducibility.}
+\item{B}{number of bootstrap replicates in Conditional DEA.}
 
-\item{similarity}{matrix of similarities. In alternative to provide the exogenous variables, the matrix of similarities can be directly provided. This allow to customize the estimation of the similarities.}
+\item{m}{number of units to be included in the reference set.}
+
+\item{alpha}{This allow to choose the size of the Confidence Intervals computed. By defaulta alpha = FALSE. In this case no confidence interval are computed.}
+
+\item{bandwidth}{the bandwidth parameters for the unconditional kernel density estimator used in the conditional DEA framework. It is typically obtained using \code{\link[np]{npudensbw}} and supports mixed data types, including continuous variables and discrete unordered or ordered factors. Bandwidths can be selected using normal reference rules, likelihood cross-validation, or least-squares cross-validation following Li and Racine (2003). If \code{NULL}, the bandwidth is estimated internally.}
+
+\item{seed}{Integer. Seed for reproducibility.}
 }
 \value{
 It returns a \code{data.frame} with the newly created set of DMUs incorporated.

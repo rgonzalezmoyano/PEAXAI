@@ -102,9 +102,9 @@ the predicted probability of belonging to the efficient class reaches the target
     "glm" = list(
       weights = "dinamic"
      )
-   )
+  )
 
-  metric_priority <- c("Balanced_Accuracy", "ROC_AUC")
+  metric_priority <- c("Balanced_Accuracy", "F1", "ROC_AUC")
 
   models <- PEAXAI_fitting(
     data = data, x = x, y = y, RTS = RTS,
@@ -118,21 +118,33 @@ the predicted probability of belonging to the efficient class reaches the target
 
   final_model <- models[["best_model_fit"]][["glm"]]
 
+  importance_method <- list(name = "PI", n.repetitions = 5)
+
   relative_importance <- PEAXAI_global_importance(
-    data = data, x = x, y = y,
     final_model = final_model,
-    background = "real", target = "real",
-    importance_method = list(name = "PI", n.repetitions = 5)
+    x = x,
+    y = y,
+    explain_data = data,
+    reference_data = final_model$trainingData,
+    importance_method = importance_method,
+    seed = 1
   )
 
   efficiency_thresholds <- seq(0.75, 0.95, 0.1)
 
-  directional_vector <- list(relative_importance = relative_importance,
-  baseline  = "mean")
+  directional_vector <- list(
+    relative_importance = relative_importance,
+    baseline  = "mean"
+  )
 
-  targets <- PEAXAI_targets(data = data, x = x, y = y, final_model = final_model,
-  efficiency_thresholds = efficiency_thresholds, directional_vector = directional_vector,
-  n_expand = 0.5, n_grid = 50, max_y = 2, min_x = 1)
+  targets <- PEAXAI_counterfactuals(
+    data = data,
+    x = x, y = y,
+    final_model = final_model,
+    efficiency_thresholds = efficiency_thresholds,
+    directional_vector = directional_vector,
+    n_expand = 0.5, n_grid = 50, max_y = 2, min_x = 1
+  )
 }
 
 }

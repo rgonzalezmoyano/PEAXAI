@@ -109,10 +109,26 @@ For other models (e.g., \pkg{caret}), \code{predict(type = "prob")[, "efficient"
 
   final_model <- models[["best_model_fit"]][["glm"]]
 
+  importance_method <- list(name = "PI", n.repetitions = 5)
+
+  relative_importance <- PEAXAI_global_importance(
+    final_model = final_model,
+    x = x,
+    y = y,
+    explain_data = data,
+    reference_data = final_model$trainingData,
+    importance_method = importance_method,
+    seed = 1
+  )
+
   imp <- PEAXAI_global_importance(
-    final_model = final_model, x = x, y = y,
-    explain_data = data, reference_data = data,
-    importance_method = list(name = "PI", n.repetitions = 5)
+    final_model = final_model,
+    x = x,
+    y = y,
+    explain_data = data,
+    reference_data = final_model$trainingData,
+    importance_method = importance_method,
+    seed = 1
   )
 
   head(imp)

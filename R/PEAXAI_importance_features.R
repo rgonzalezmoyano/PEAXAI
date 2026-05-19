@@ -89,11 +89,26 @@
 #'
 #'   final_model <- models[["best_model_fit"]][["glm"]]
 #'
-#'   imp <- PEAXAI_global_importance(
-#'     data = data, x = x, y = y,
+#'   importance_method <- list(name = "PI", n.repetitions = 5)
+#'
+#'   relative_importance <- PEAXAI_global_importance(
 #'     final_model = final_model,
-#'     background = "real", target = "real",
-#'     importance_method = list(name = "PI", n.repetitions = 5)
+#'     x = x,
+#'     y = y,
+#'     explain_data = data,
+#'     reference_data = final_model$trainingData,
+#'     importance_method = importance_method,
+#'     seed = 1
+#'   )
+#'
+#'   imp <- PEAXAI_global_importance(
+#'     final_model = final_model,
+#'     x = x,
+#'     y = y,
+#'     explain_data = data,
+#'     reference_data = final_model$trainingData,
+#'     importance_method = importance_method,
+#'     seed = 1
 #'   )
 #'
 #'   head(imp)
@@ -449,10 +464,18 @@ PEAXAI_global_importance <- function(
 #'
 #'   final_model <- models[["best_model_fit"]][["glm"]]
 #'
+#'   importance_method <- list(
+#'     name = "SHAP",
+#'     nsim = 200
+#'    )
+#'
 #'   imp_local <- PEAXAI_local_importance(
-#'     final_model = final_model, x = x, y = y,
-#'     explain_data = data, reference_data = data,
-#'     importance_method = list(name = "SHAP", bg_n = 200)
+#'     final_model = final_model,
+#'     x = x, y = y,
+#'     explain_data = data,
+#'     reference_data = final_model$trainingData,
+#'     importance_method = importance_method,
+#'     seed = 1
 #'   )
 #'
 #'   head(imp_local)

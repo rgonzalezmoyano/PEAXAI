@@ -48,6 +48,8 @@ returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 
 \item{B}{number of bootstrap replicates in Conditional DEA.}
 
+\item{alpha}{This allow to choose the size of the Confidence Intervals computed. By defaulta alpha = FALSE. In this case no confidence interval are computed.}
+
 \item{m}{number of units to be included in the reference set.}
 
 \item{imbalance_rate}{Optional target(s) for class balance via SMOTE. If \code{NULL},
@@ -124,8 +126,7 @@ balancing level.
     imbalance_rate = NULL,
     methods = methods,
     trControl = trControl,
-    metric_priority = c("Balanced_Accuracy", "Precision"),
-    calibration_method = "platt",
+    metric_priority = c("Balanced_Accuracy", "F1", "ROC_AUC"),
     seed = 1,
     verbose = FALSE
   )

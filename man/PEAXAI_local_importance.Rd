@@ -123,10 +123,18 @@ the DMU (using the chosen SA method/measure) and normalizes sensitivities per DM
 
   final_model <- models[["best_model_fit"]][["glm"]]
 
+  importance_method <- list(
+    name = "SHAP",
+    nsim = 200
+   )
+
   imp_local <- PEAXAI_local_importance(
-    final_model = final_model, x = x, y = y,
-    explain_data = data, reference_data = data,
-    importance_method = list(name = "SHAP", bg_n = 200)
+    final_model = final_model,
+    x = x, y = y,
+    explain_data = data,
+    reference_data = final_model$trainingData,
+    importance_method = importance_method,
+    seed = 1
   )
 
   head(imp_local)

@@ -5,6 +5,11 @@
 #' @param data A \code{data.frame} containing the variables used in the model.
 #' @param x Column indexes of the input variables in the \code{data}.
 #' @param y Column indexes of the output variables in the \code{data}.
+#' @param z_numeric Integer vector with column indices of numeric environment variables in \code{data}. By default is \code{NULL}.
+#' @param z_factor Integer vector with column indices of factor environment variables in \code{data}. By default is \code{NULL}.
+#' @param B number of bootstrap replicates in Conditional DEA.
+#' @param m number of units to be included in the reference set.
+#' @param alpha This allow to choose the size of the Confidence Intervals computed. By defaulta alpha = FALSE. In this case no confidence interval are computed.
 #' @param RTS Text string or number defining the underlying DEA technology /
 #'   returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 #'   \describe{
@@ -16,7 +21,7 @@
 #'     \item{\code{5} / \code{"add"}}{Additivity (scaling up and down, but only with integers), and free disposability.}
 #'   }
 #' @param balance_data Indicate level of efficient units to achive and the number of efficient and not efficient units.
-#' @param similarity matrix of similarities. In alternative to provide the exogenous variables, the matrix of similarities can be directly provided. This allow to customize the estimation of the similarities.
+#' @param bandwidth the bandwidth parameters for the unconditional kernel density estimator used in the conditional DEA framework. It is typically obtained using \code{\link[np]{npudensbw}} and supports mixed data types, including continuous variables and discrete unordered or ordered factors. Bandwidths can be selected using normal reference rules, likelihood cross-validation, or least-squares cross-validation following Li and Racine (2003). If \code{NULL}, the bandwidth is estimated internally.
 #' @param seed  Integer. Seed for reproducibility.
 #'
 #'
@@ -139,15 +144,15 @@ SMOTE_Z_data <- function (
       # Comprobar que existen en data
       missing_cols <- setdiff(env_cols, names(data))
       if (length(missing_cols) > 0) {
-        stop("Estas columnas no están en `data`: ", paste(missing_cols, collapse = ", "))
+        stop("These columns are not in `data`: ", paste(missing_cols, collapse = ", "))
       }
 
-      # 2) Extraer el "target" (la combinación concreta)
+      # 2) Extract the "target" (the specific combination)
       if (!is.data.frame(current_z_factor)) {
-        stop("`current_z_factor` debe ser un data.frame/tibble de 1 fila con columnas = variables de entorno.")
+        stop("`current_z_factor` must be a 1-row data.frame/tibble with columns = environmental variables.")
       }
       if (nrow(current_z_factor) != 1) {
-        stop("`current_z_factor` debe tener exactamente 1 fila.")
+        stop("`current_z_factor` must have exactly 1 row.")
       }
 
       target <- current_z_factor[1, env_cols, drop = FALSE]
@@ -181,13 +186,13 @@ SMOTE_Z_data <- function (
       data$group_similarity[current_id] <- data$group_similarity[ref_unit]
     }
   }
-
-  resumen_final <- data %>%
-    group_by(group_similarity) %>%
-    summarise(
-      n = dplyr::n(),
-      prop_efficient = mean(class_efficiency == "efficient")
-    )
+  #
+  # resumen_final <- data %>%
+  #   group_by(group_similarity) %>%
+  #   summarise(
+  #     n = dplyr::n(),
+  #     prop_efficient = mean(class_efficiency == "efficient")
+  #   )
 
   # Step 2: determine the efficient facets
   for (group_i in unique(data[["group_similarity"]])) {
@@ -215,7 +220,6 @@ SMOTE_Z_data <- function (
 
         balance_datasets_i <- get_SMOTE_DMUs(
           data = data_i,
-          REF_data = data[,  setdiff(names(data_i), "group_similarity")],
           facets = facets,
           x = x,
           y = y,

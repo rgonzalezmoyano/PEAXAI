@@ -16,6 +16,7 @@
 #' @param z_factor Integer vector with column indices of factor environment variables in \code{data}. By default is \code{NULL}.
 #' @param B number of bootstrap replicates in Conditional DEA.
 #' @param m number of units to be included in the reference set.
+#' @param alpha This allow to choose the size of the Confidence Intervals computed. By defaulta alpha = FALSE. In this case no confidence interval are computed.
 #' @param RTS Text string or number defining the underlying DEA technology /
 #'   returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 #'   \describe{
@@ -93,8 +94,7 @@
 #'     imbalance_rate = NULL,
 #'     methods = methods,
 #'     trControl = trControl,
-#'     metric_priority = c("Balanced_Accuracy", "Precision"),
-#'     calibration_method = "platt",
+#'     metric_priority = c("Balanced_Accuracy", "F1", "ROC_AUC"),
 #'     seed = 1,
 #'     verbose = FALSE
 #'   )
@@ -1034,12 +1034,12 @@ PEAXAI_fitting <- function (
       # check performance on valid data
       if (!is.null(calibration_model)) {
 
-        y_hat <- predict_calibrated(
-          newdata = valid_data,
-          model_fit = model_fit,
-          calibration_model = calibration_model,
-          mth_cal = mth_cal
-        )
+        # y_hat <- predict_calibrated(
+        #   newdata = valid_data,
+        #   model_fit = model_fit,
+        #   calibration_model = calibration_model,
+        #   mth_cal = mth_cal
+        # )
 
       } else {
 
@@ -1287,130 +1287,4 @@ PEAXAI_fitting <- function (
     return(output_PEAXAI_models)
   }
 browser()
-  # # It is necessary to determine the complete facets with ALL data
-  # get_imbalance <- function(df) as.numeric(sub("\\*$", "", as.character(df["Imbalance_rate"])))
-  #
-  # best_imbalance <- sort(unique(unlist(lapply(save_performance_validation, get_imbalance))), na.last = NA)
-  #
-  # # best_imbalance <- save_performance_validation[[model_i]][, "Imbalance_rate"]
-  #
-  # if (length(best_imbalance) == 1 & best_imbalance[1] == real_balance) {
-  #
-  #   datasets_all <- list(all_data)
-  #   real_balance <- round(prop.table(table(all_data$class_efficiency)), 4)
-  #   names(datasets_all)[1] <- paste0(as.character(round(real_balance, 4)),"*")
-  #
-  # } else {
-  #
-  #   if(round(real_balance, 4) %in% best_imbalance) {
-  #
-  #     best_imbalance_SMOTE <- best_imbalance[which(round(real_balance, 4) != best_imbalance)]
-  #
-  #     datasets_all <- list(all_data)
-  #     real_balance <- round(prop.table(table(all_data$class_efficiency)), 4)[1]
-  #     names(datasets_all)[1] <- paste0(as.character(round(real_balance, 4)),"*")
-  #
-  #     if (as.character(RTS) %in% RTS_available) {
-  #
-  #       # determine complete facets
-  #       train_data_SMOTE <- SMOTE_data(
-  #         data = all_data,
-  #         x = x,
-  #         y = y,
-  #         RTS = RTS,
-  #         balance_data = best_imbalance_SMOTE,
-  #         seed = seed
-  #       )
-  #
-  #       datasets_all <- append(train_data_SMOTE, datasets_all, after = 0)
-  #
-  #     }
-  #
-  #   } else {
-  #
-  #     datasets_all <- list()
-  #     best_imbalance_SMOTE <- best_imbalance
-  #
-  #     if (as.character(RTS) %in% RTS_available) {
-  #
-  #       # determine complete facets
-  #       train_data_SMOTE <- SMOTE_data(
-  #         data = all_data,
-  #         x = x,
-  #         y = y,
-  #         RTS = RTS,
-  #         balance_data = best_imbalance_SMOTE,
-  #         seed = seed
-  #       )
-  #
-  #       datasets_all <- append(train_data_SMOTE, datasets_all)
-  #
-  #     }
-  #
-  #   }
-  #
-  # }
-  #
-  # # train with ALL data: best balance + hypeparameters
-  # for (method_i in names(methods)) {
-  #
-  #   imbalance_rate_i <- save_performance_validation[[method_i]]$Imbalance_rate
-  #
-  #   if (grepl("\\*$", imbalance_rate_i)) {
-  #     imbalance_rate_i <- paste0(round(real_balance, 4), "*")
-  #   }
-  #
-  #   names_tuneGrid <- names(best_methods[[method_i]][["tuneGrid"]])
-  #
-  #   if (method_i != "glm") {
-  #     best_methods[[method_i]][["tuneGrid"]] <- save_performance_validation[[method_i]][names_tuneGrid]
-  #   }
-  #
-  #   model_fit <- train_PEAXAI(
-  #     data = datasets_all[[as.character(imbalance_rate_i)]],
-  #     method = method_i,
-  #     parameters = best_methods[[method_i]],
-  #     trControl = trainControl(method = "none", classProbs = TRUE),
-  #     metric_priority = metric_priority,
-  #     seed = seed
-  #   )
-  #
-  #   # actualize weights
-  #   if (method_i == "glm") {
-  #
-  #     parameters <- methods[["glm"]]
-  #
-  #     if (parameters[["weights"]][1] == "dinamic") {
-  #       w0 <- nrow(datasets_all[[as.character(imbalance_rate_i)]]) / (2 * length(which(datasets_all[[as.character(imbalance_rate_i)]]$class_efficiency == "not_efficient")))
-  #       w1 <- nrow(datasets_all[[as.character(imbalance_rate_i)]]) / (2 * length(which(datasets_all[[as.character(imbalance_rate_i)]]$class_efficiency == "efficient")))
-  #     } else if (is.data.frame(parameters[["weights"]])) {
-  #       w0 <- parameters[["weights"]][["w0"]]
-  #       w1 <- parameters[["weights"]][["w1"]]
-  #     } else {
-  #       w0 <- 1
-  #       w1 <- 1
-  #     }
-  #
-  #     save_performance_validation[[method_i]]$w0 <- w0
-  #     save_performance_validation[[method_i]]$w1 <- w1
-  #
-  #   }
-  #
-  #   save_best_model_fit[[method_i]] <- model_fit
-  # }
-  #
-  # if(null_calibration) {
-  #   calibration_model <- NULL
-  # }
-  #
-  # output_PEAXAI_models <- list(
-  #   best_model_fit = save_best_model_fit,
-  #   performance_validation = save_performance_validation,
-  #   performance_train = save_performance_train,
-  #   performance_train_all = performance_train_all_by_method,
-  #   calibration_model = save_calibration_model
-  # )
-  #
-  # return(output_PEAXAI_models)
-
 }

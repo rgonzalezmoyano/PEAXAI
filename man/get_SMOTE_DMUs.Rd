@@ -6,7 +6,6 @@
 \usage{
 get_SMOTE_DMUs(
   data,
-  REF_data,
   facets,
   x,
   y,
@@ -42,6 +41,8 @@ returns-to-scale assumption (default: \code{"vrs"}). Accepted values:
 \item{\code{4} / \code{"irs"}}{Increasing returns to scale (up-scaling, not down-scaling), convexity and free disposability.}
 \item{\code{5} / \code{"add"}}{Additivity (scaling up and down, but only with integers), and free disposability.}
 }}
+
+\item{alpha}{This allow to choose the size of the Confidence Intervals computed. By defaulta alpha = FALSE. In this case no confidence interval are computed.}
 
 \item{balance_data}{A numeric vector indicating the different levels of balance required (e.g., c(0.1, 0.45, 0.6)).}
 
