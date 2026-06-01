@@ -1,0 +1,64 @@
+#' Spanish Food Industry Firms Dataset
+#'
+#' Dataset containing information on food industry companies located in Spain,
+#' used to illustrate efficiency analysis within the \pkg{PEAXAI} package.
+#'
+#' @details
+#' The dataset includes 1267 food industry firms, collected from the
+#' \emph{SABI} database for the year 2024. Each observation corresponds to a single company.
+#' Variables reflect both operational and financial dimensions relevant for productivity and efficiency assessment.
+#'
+#' The output variable is:
+#' \itemize{
+#'   \item \code{operating_income} — Operating income (in euros), measuring revenues generated
+#'   from core business activities.
+#' }
+#'
+#' The input variables are:
+#' \itemize{
+#'   \item \code{fixed_assets} — Tangible fixed assets (euros), such as buildings and machinery.
+#'   \item \code{personnel_expenses} — Personnel expenses (millions of euros), including salaries, benefits, and training.
+#' }
+#'
+#' The sample displays substantial dispersion across variables, encompassing both small and large firms.
+#' This heterogeneity affects measures of central tendency—mean and median values differ considerably—thus providing a realistic challenge for efficiency and explainability analyses.
+#'
+#' @format
+#' A \code{data.frame} with 1267 rows and 4 columns:
+#' \describe{
+#'   \item{fixed_assets}{Tangible fixed assets (euros).}
+#'   \item{personnel_expenses}{Personnel expenses (euros).}
+#'   \item{operating_income}{Operating income (euros).}
+#'   \item{firm_id}{Anonymized firm identifier identifying each DMU.}
+#' }
+#'
+#' @source
+#' SABI (Sistema de Análisis de Balances Ibéricos) database, 2024.
+#'
+#' @examples
+#' data(data_SABI)
+#' str(data_SABI)
+#' summary(data_SABI)
+#'
+#' if (requireNamespace("ggplot2", quietly = TRUE)) {
+#'   ggplot2::ggplot(data_SABI, ggplot2::aes(x = personnel_expenses, y = operating_income)) +
+#'     ggplot2::geom_point(alpha = 0.6) +
+#'     ggplot2::labs(
+#'       x = "Personnel expenses",
+#'       y = "Operating income (euros)",
+#'       title = "Spanish Food Industry Firms (2024)"
+#'     ) +
+#'     ggplot2::theme_minimal() +
+#'     ggplot2::theme(
+#'       plot.title = ggplot2::element_text(face = "bold"),
+#'       axis.line = ggplot2::element_line(color = "black"),
+#'       axis.ticks = ggplot2::element_line(color = "black"),
+#'       panel.grid.minor = ggplot2::element_blank()
+#'     )
+#' }
+#'
+#' @docType data
+#' @name data_SABI
+#' @usage data(data_SABI)
+#' @keywords datasets
+"data_SABI"
