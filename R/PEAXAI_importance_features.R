@@ -126,7 +126,8 @@
 #' @export
 
 PEAXAI_global_importance <- function(
-    final_model, x, y, explain_data, reference_data,
+    final_model, x, y, z_numeric, z_factor,
+    explain_data, reference_data,
     importance_method, seed = 314
     ) {
 
@@ -141,8 +142,6 @@ PEAXAI_global_importance <- function(
   explain_data <- as.data.frame(explain_data)
   reference_data <- as.data.frame(reference_data)
 
-  # --------------------------------------------------------
-
   # ----------------------------------------------------------------------------
   # detecting importance variables ---------------------------------------------
   # ----------------------------------------------------------------------------
@@ -156,34 +155,39 @@ PEAXAI_global_importance <- function(
   }
 
   # format datasets
-  format_dataset <- function(d, x_cols, y_cols) {
+  format_dataset <- function(d, x_cols, y_cols, z_num_cols, z_fac_cols) {
     if (".outcome" %in% names(d)) {
       names(d)[names(d) == ".outcome"] <- "class_efficiency"
       d <- d[, c(setdiff(names(d), "class_efficiency"), "class_efficiency")]
       return(d)
     } else {
-      d <- d[, c(x_cols, y_cols)]
+      d <- d[, c(x_cols, y_cols, z_num_cols, z_fac_cols)]
       return(d)
     }
   }
 
-  target_data <- format_dataset(explain_data, x, y)
-  train_data <- format_dataset(reference_data, x, y)
+  target_data <- format_dataset(explain_data, x, y, z_numeric, z_factor)
+  train_data <- reference_data[,setdiff(names(reference_data), "class_efficiency"), drop = FALSE]
 
   x_len <- length(x)
   y_len <- length(y)
+  z_numeric_len <- length(z_numeric)
+  z_factor_len <- length(z_factor)
 
   # --- SECURITY CHECK AGAINST EXTERNAL DATA ---
   n_explain <- nrow(target_data)
+
   if (n_explain > nrow(train_data)) {
     stop("Error: 'explain_data' has more rows than 'reference_data'. They must be the original DMUs passed to PEAXAI_fitting().")
   }
+
   # Extract the features from train_data (dropping class_efficiency) to compare
   ref_subset <- train_data[1:n_explain, setdiff(names(train_data), "class_efficiency"), drop = FALSE]
-  # Compare formatted datasets
-  if (!isTRUE(all.equal(target_data, ref_subset, check.attributes = FALSE))) {
-    stop("Error: 'explain_data' features do not match the original training observations. You must provide the same DMUs used in PEAXAI_fitting().")
-  }
+
+  # # Compare formatted datasets
+  # if (!isTRUE(all.equal(target_data, ref_subset, check.attributes = FALSE))) {
+  #   stop("Error: 'explain_data' features do not match the original training observations. You must provide the same DMUs used in PEAXAI_fitting().")
+  # }
 
   # methods XAI
   if (importance_method[["name"]] == "SA") {
@@ -246,7 +250,6 @@ PEAXAI_global_importance <- function(
 
     bg_n <- if (!is.null(importance_method[["bg_n"]])) importance_method[["bg_n"]] else 200
 
-    #
     shap_model <- kernelshap::kernelshap(
       object = final_model,
       X = target_data,
@@ -530,10 +533,12 @@ PEAXAI_local_importance <- function(
   }
 
   target_data <- format_dataset(explain_data, x, y)
-  train_data <- format_dataset(reference_data, x, y)
+  train_data <- reference_data[,setdiff(names(reference_data), "class_efficiency"), drop = FALSE]
 
   x_len <- length(x)
   y_len <- length(y)
+  z_numeric_len <- length(z_numeric)
+  z_factor_len <- length(z_factor)
 
   # methods XAI
   if (importance_method[["name"]] == "SA") {

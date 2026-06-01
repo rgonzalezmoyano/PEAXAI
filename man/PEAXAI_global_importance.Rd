@@ -8,6 +8,8 @@ PEAXAI_global_importance(
   final_model,
   x,
   y,
+  z_numeric,
+  z_factor,
   explain_data,
   reference_data,
   importance_method,
