@@ -39,6 +39,8 @@
 #' the function searches for the smallest directional distance \eqn{\beta} such that
 #' the predicted probability of belonging to the efficient class reaches the target.
 #'
+#' @importFrom dplyr bind_cols
+#'
 #' @return
 #' A named \code{list} with one element per threshold. Each element contains:
 #' \itemize{
@@ -123,7 +125,7 @@
 #' @export
 
 PEAXAI_counterfactuals <- function (
-    data, x, y, final_model, calibration_model = NULL,
+    data, x, y, z_numeric = NULL, z_factor = NULL, final_model, calibration_model = NULL,
     sign = FALSE, efficiency_thresholds, directional_vector,
     n_expand, n_grid, max_y = 2, min_x = 1
 ) {
@@ -136,12 +138,63 @@ PEAXAI_counterfactuals <- function (
 
   data <- as.data.frame(data)
 
+  copy_data <- data
+
   # reorder index 'x' and 'y' in data
-  data <- data[, c(x,y)]
+  data_x <- data[,c(x), drop = FALSE]
+  data_y <- data[,c(y), drop = FALSE]
+  data_z_numeric <- data[, c(z_numeric), drop = FALSE]
+  data_z_factor <- data[, c(z_factor), drop = FALSE]
+
+  # reorder index 'x' and 'y' in data
+  data <- data[, c(x,y), drop = FALSE]
   x <- 1:(ncol(data) - length(y))
   y <- (length(x) + 1):ncol(data)
 
   names_data <- names(data[,c(x,y)])
+
+  betas <- as.data.frame(matrix(
+    data = NA,
+    ncol = 2,
+    nrow = nrow(data)
+  ))
+
+  variables <- c(x,y)
+
+  if (!is.null(z_numeric)) {
+    # index
+    z_numeric <- NCOL(data) + z_numeric
+
+    # check
+    ok <- all(vapply(data_z_numeric, is.numeric, logical(1)))
+    if (!ok) {
+      stop("All columns in z_numeric must be numeric.")
+    }
+
+    # add data
+    data <- cbind(data, data_z_numeric)
+
+    z_numeric <- (length(variables) + 1):ncol(data)
+    variables <- c(variables, z_numeric)
+  }
+
+  if (!is.null(z_factor)) {
+    # index
+    z_factor <- NCOL(data) + z_factor
+
+    # check
+    ok <- all(vapply(data_z_factor, is.factor, logical(1)))
+    if (!ok) {
+      stop("All columns in z_factor must be factor.")
+    }
+
+    # add data
+    data <- cbind(data, data_z_factor)
+
+    z_factor <- (length(variables) + 1):ncol(data)
+    variables <- c(variables, z_factor)
+
+  }
 
   # min and max values
   min_x_possible <- apply(as.matrix(data[,x]), 2, min)
@@ -392,6 +445,8 @@ stop("Not available.")
     data = data,
     x = x,
     y = y,
+    z_numeric = z_numeric,
+    z_factor = z_factor,
     final_model = final_model,
     calibration_model = calibration_model,
     efficiency_thresholds = efficiency_thresholds,
@@ -410,17 +465,23 @@ stop("Not available.")
 
     message(paste0("In progress: ", thr))
 
-    data <- data[, c(x,y)]
-
     # save data points from scenario
     data_scenario <- as.data.frame(
       matrix(
         data = NA,
-        ncol = length(c(x,y)),
+        ncol = max(variables),
         nrow = nrow(data)
       )
     )
     names(data_scenario) <- names(data)
+
+    if (!is.null(z_numeric)) {
+      data_scenario[, z_numeric] <- data[, z_numeric]
+    }
+
+    if (!is.null(z_factor)) {
+      data_scenario[, z_factor] <- data[, z_factor]
+    }
 
     betas <- as.data.frame(matrix(
       data = NA,
@@ -428,16 +489,12 @@ stop("Not available.")
       nrow = nrow(data)
     ))
 
-    variables <- c(x, y)
-
     # loop for each observation
     for (i in 1:nrow(data)) {
 
       # inicial prediction
       prediction_0 <- PEAXAI_predict(
         data = data[i,variables],
-        x = x,
-        y = y,
         final_model = final_model,
         calibration_model = calibration_model
       )
@@ -503,68 +560,6 @@ stop("Not available.")
 
         while (!found_cut_off) {
 
-#           iter_count <- iter_count + 1
-#
-#           # matrix to apply changes
-#           matrix_eff <- as.data.frame(matrix(
-#             data = NA,
-#             ncol = length(variables),
-#             nrow = length(range_beta)
-#           ))
-#           names(matrix_eff) <- names(data)
-#
-#           # Asignar valores para 'x' y 'y'
-#           matrix_eff[, x] <- data[i,x]
-#           matrix_eff[, x] <- sweep(change_x, 1, range_beta, "*") + matrix_eff[, x]
-#
-#           matrix_eff[, y] <- data[i, y]
-#           matrix_eff[, y] <- sweep(change_y, 1, range_beta, "*") + matrix_eff[, y]
-#
-#           # know if there are not possible values
-#           mx <- as.matrix(matrix_eff[, x, drop = FALSE])
-#           min_x_possible_vector <- as.numeric(min_x_possible*min_x)
-#
-#           my <- as.matrix(matrix_eff[, y, drop = FALSE])
-#           max_y_possible_vector <- as.numeric(max_y_possible*max_y)
-#
-#           # sums how many TRUE lines are violating the restriction
-#           viol <- rowSums(mx < rep(min_x_possible_vector, each = nrow(mx))) > 0
-#           idx_viol_x <- which(viol)
-#           viol <- rowSums(my > rep(max_y_possible_vector, each = nrow(my))) > 0
-#           idx_viol_y <- which(viol)
-#
-#           viol <- rep(FALSE, nrow(mx))
-#           viol[idx_viol_x] <- TRUE
-#           viol[idx_viol_y] <- TRUE
-#
-#           keep <- !viol
-#           if (any(!keep)) {
-#             matrix_eff <- matrix_eff[keep, , drop = FALSE]
-#             range_beta <- range_beta[keep, , drop = FALSE]
-#           }
-# browser()
-#           # probability for each row
-#           eff_vector <- apply(matrix_eff, 1, function(row) {
-#
-#             row_df <- as.data.frame(t(row))
-#             colnames(row_df) <- names(data)
-#
-#             # pred <- unlist(predict(final_model, row_df, type = "prob")[1])
-#             pred <- PEAXAI_predict(
-#               data = matrix_eff,
-#               x = x,
-#               y = y,
-#               final_model = final_model,
-#               calibration_model = calibration_model
-#             )
-#
-#             return(pred)
-#
-#           })
-          #
-          # # # Ensures that each position is at least the maximum value observed up to that point
-          # eff_vector <- cummax(eff_vector)
-
           iter_count <- iter_count + 1
           # 1. Asegurar que range_beta es un vector simple (evita problemas de dimensiones)
           rb_vec <- as.numeric(range_beta)
@@ -572,17 +567,36 @@ stop("Not available.")
           # 2. Operaciones matriciales puras para los cambios
           # Multiplicamos la matriz de direcciones por el vector de betas
           matrix_eff_x <- change_x * rb_vec +
-            matrix(as.numeric(data[i, x]), nrow = n_current, ncol = length(x), byrow = TRUE)
+            matrix(as.numeric(data[i, x]),
+                   nrow = n_current,
+                   ncol = length(x),
+                   byrow = TRUE)
 
           matrix_eff_y <- change_y * rb_vec +
-            matrix(as.numeric(data[i, y]), nrow = n_current, ncol = length(y), byrow = TRUE)
+            matrix(as.numeric(data[i, y]),
+                   nrow = n_current,
+                   ncol = length(y),
+                   byrow = TRUE)
+
           # 3. Construcción de un data.frame completamente limpio ("matrix-free")
           # El lapply asegura que toda la "basura" de las matrices (nmatrix.1) desaparezca
           matrix_eff <- as.data.frame(cbind(matrix_eff_x, matrix_eff_y))
+
+          # change class and add names
           matrix_eff[] <- lapply(matrix_eff, as.numeric)
           names(matrix_eff) <- names(data)[c(x, y)]
 
-          # 4. Restricciones de dominio
+          # Add z_numeric values of i
+          if (!(is.null(z_numeric))) {
+            matrix_eff <- bind_cols(matrix_eff, data[i, z_numeric])
+          }
+
+          # Add z_numeric values of i
+          if (!(is.null(z_factor))) {
+            matrix_eff <- bind_cols(matrix_eff,  data[i, z_factor])
+          }
+
+          # Dominio restrictions
           min_x_possible_vector <- as.numeric(min_x_possible * min_x)
           max_y_possible_vector <- as.numeric(max_y_possible * max_y)
           viol_x <- rowSums(sweep(matrix_eff_x, 2, min_x_possible_vector, "<")) > 0
@@ -594,15 +608,14 @@ stop("Not available.")
             rb_vec <- rb_vec[keep]
             range_beta <- as.matrix(rb_vec) # Mantener el formato matriz (n_grid x 1) por seguridad
           }
+
           if (nrow(matrix_eff) == 0) {
             # Si todos los puntos se salen del dominio, vector vacío
             eff_vector <- numeric(0)
           } else {
-            # 5. Predicción vectorizada ultrarrápida
+            # prediction
             eff_vector <- PEAXAI_predict(
               data = matrix_eff,
-              x = x,
-              y = y,
               final_model = final_model,
               calibration_model = calibration_model
             )
@@ -617,6 +630,14 @@ stop("Not available.")
             data_scenario[i, x] <- data[i,x]
             data_scenario[i, y] <- data[i,y]
 
+            # if (!is.null(z_numeric)) {
+            #   data_scenario[i, z_numeric] <- data[i,z_numeric]
+            # }
+            #
+            # if (!is.null(z_factor)) {
+            #   data_scenario[i, z_factor] <- data[i,z_factor]
+            # }
+
             betas[i, 1] <- 0
             betas[i, 2] <- eff_vector[1]
             break
@@ -627,6 +648,16 @@ stop("Not available.")
 
             data_scenario[i, x] <- rep(NA, ncol(matrix_eff[,x]))
             data_scenario[i, y] <- rep(NA, ncol(matrix_eff[,y]))
+
+            # if (!is.null(z_numeric)) {
+            #   # data_scenario[i, z_numeric] <- data[i,z_numeric]
+            #   data_scenario[i,] <- cbind(data_scenario[i,], data[i, z_numeric])
+            # }
+            #
+            # if (!is.null(z_factor)) {
+            #   # data_scenario[i, z_factor] <- data[i, z_factor]
+            #   data_scenario[i,] <- cbind(data_scenario[i,], data[i, z_factor])
+            # }
 
             betas[i, 1] <- NA
             betas[i, 2] <- NA
@@ -645,6 +676,14 @@ stop("Not available.")
               # Store the 'x' and 'y' values that match the threshold
               data_scenario[i, x] <- matrix_eff[idx, x]
               data_scenario[i, y] <- matrix_eff[idx, y]
+
+              # if (!is.null(z_numeric)) {
+              #   data_scenario[i, z_numeric] <- data[i,z_numeric]
+              # }
+              #
+              # if (!is.null(z_factor)) {
+              #   data_scenario[i, z_factor] <- data[i,z_factor]
+              # }
 
               betas[i, 1] <- range_beta[idx]
               betas[i, 2] <- thr
@@ -675,6 +714,14 @@ stop("Not available.")
                 data_scenario[i, x] <- matrix_eff[pos, x]
                 data_scenario[i, y] <- matrix_eff[pos, y]
 
+                # if (!is.null(z_numeric)) {
+                #   data_scenario[i, z_numeric] <- data[i,z_numeric]
+                # }
+                #
+                # if (!is.null(z_factor)) {
+                #   data_scenario[i, z_factor] <- data[i,z_factor]
+                # }
+
                 betas[i, 1] <- range_beta[pos]
 
                 pred <- as.data.frame(data_scenario[i,variables])
@@ -702,6 +749,14 @@ stop("Not available.")
             data_scenario[i, x] <- matrix_eff[(n_grid/2), x]
             data_scenario[i, y] <- matrix_eff[(n_grid/2), y]
 
+            # if (!is.null(z_numeric)) {
+            #   data_scenario[i, z_numeric] <- data[i,z_numeric]
+            # }
+            #
+            # if (!is.null(z_factor)) {
+            #   data_scenario[i, z_factor] <- data[i,z_factor]
+            # }
+
             betas[i, 1] <- range_beta[(n_grid/2)]
             betas[i, 2] <- eff_vector[(n_grid/2)]
 
@@ -714,6 +769,14 @@ stop("Not available.")
 
             data_scenario[i, x] <- matrix_eff[(n_grid/2), x]
             data_scenario[i, y] <- matrix_eff[(n_grid/2), y]
+
+            # if (!is.null(z_numeric)) {
+            #   data_scenario[i, z_numeric] <- data[i,z_numeric]
+            # }
+            #
+            # if (!is.null(z_factor)) {
+            #   data_scenario[i, z_factor] <- data[i,z_factor]
+            # }
 
             betas[i, 1] <- range_beta[(n_grid/2)]
             betas[i, 2] <- NA
@@ -785,18 +848,18 @@ stop("Not available.")
 #'
 
 find_beta_maxmin <- function(
-  data, x, y, final_model, calibration_model,
+  data, x, y, z_numeric = NULL, z_factor = NULL, final_model, calibration_model,
   efficiency_thresholds, n_expand, vector_gx,
   vector_gy, max_y, min_x
 ) {
 
+  data <- as.data.frame(data)
+
   betas <- as.data.frame(matrix(
     data = NA,
     ncol = 2,
-    nrow = nrow(data)
-  ))
-
-  variables <- c(x,y)
+    nrow = nrow(data))
+  )
 
   max_efficiency_threshold <- max(efficiency_thresholds)
   min_efficiency_threshold <- min(efficiency_thresholds)
@@ -806,9 +869,7 @@ find_beta_maxmin <- function(
 
     # prediction_0 <- predict(final_model, data[i,variables], type = "prob")[1]
     prediction_0 <- PEAXAI_predict(
-      data = data[i,variables],
-      x = x,
-      y = y,
+      data = data[i,],
       final_model = final_model,
       calibration_model = calibration_model
     )
@@ -834,8 +895,6 @@ find_beta_maxmin <- function(
       max_y_i <- as.data.frame(t(as.matrix(max_y_i)))
       names(max_y_i) <- names_data[y]
 
-      manifold_check <- FALSE
-
       beta_j <- 0
 
       betas[i,1] <- NA
@@ -855,48 +914,22 @@ find_beta_maxmin <- function(
         }
 
         new_point <- cbind(new_x, new_y)
-        names(new_point) <- names(data[,variables])
 
-        # prediction_j <- predict(final_model, new_point, type = "prob")[1]
+        # add Z numeric variables
+        if (!(is.null(z_numeric))) {
+          new_point <- cbind(new_point, data[i, z_numeric])
+        }
 
-        # ### new
-        # library(dbscan)
-        #
-        # # domain data
-        # manifold <- as.matrix(data[,c(x,y)])
-        #
-        # # 3. Combinar para calcular
-        # data_plus_new_unit <- rbind(manifold, new_point)
-        #
-        # # 4. Calcular LOF (k debe ser similar al número de vecinos que esperarías)
-        # lof_scores <- lof(data_plus_new_unit, minPts = length(c(x,y))*2)
-        # if (tail(lof_scores, 1) > lof_scores[i] & lof_scores[i] > 2) {
-        #   manifold_check <- TRUE
-        # }
-        # ###
+        # add Z factor variables
+        if (!(is.null(z_factor))) {
+          new_point <- cbind(new_point, data[i, z_factor])
+        }
 
-        # ###
-        # # domain data
-        # manifold <- as.matrix(data[,c(x,y)])
-        # # daisy() maneja automáticamente variables numéricas y categóricas
-        # distances <- daisy(rbind(manifold, new_point), metric = "gower")
-        #
-        # # Convertimos a matriz y extraemos la última fila (nuestra distancia con el resto)
-        # dist_matrix <- as.matrix(distances)
-        # dist_cf <- dist_matrix[nrow(dist_matrix), 1:(nrow(dist_matrix)-1)]
-        #
-        # # El vecino más cercano según Gower
-        # min_gower <- min(dist_cf)
-        #
-        # if (min_gower > 0.15) {
-        #   manifold_check <- TRUE
-        # }
-        # ###
+        names(new_point) <- names(data)
 
+        # predict new point
         prediction_j <- PEAXAI_predict(
           data = new_point,
-          x = x,
-          y = y,
           final_model = final_model,
           calibration_model = calibration_model
         )
@@ -921,7 +954,7 @@ find_beta_maxmin <- function(
           betas[i, 2] <- beta_j
           control_threshold <- TRUE
 
-        } else if (any(new_point[x] < min_x_i) || any(new_point[y] > max_y_i) || manifold_check == TRUE) {
+        } else if (any(new_point[x] < min_x_i) || any(new_point[y] > max_y_i)) {
           # break the while loop
           betas[i, 2] <- beta_j
           control_threshold <- TRUE

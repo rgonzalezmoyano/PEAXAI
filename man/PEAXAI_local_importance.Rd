@@ -8,6 +8,8 @@ PEAXAI_local_importance(
   final_model,
   x,
   y,
+  z_numeric = NULL,
+  z_factor = NULL,
   explain_data,
   reference_data,
   importance_method,

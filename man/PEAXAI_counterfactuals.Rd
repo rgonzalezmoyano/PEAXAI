@@ -8,6 +8,8 @@ PEAXAI_counterfactuals(
   data,
   x,
   y,
+  z_numeric = NULL,
+  z_factor = NULL,
   final_model,
   calibration_model = NULL,
   sign = FALSE,

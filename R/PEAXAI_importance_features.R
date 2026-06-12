@@ -126,7 +126,7 @@
 #' @export
 
 PEAXAI_global_importance <- function(
-    final_model, x, y, z_numeric, z_factor,
+    final_model, x, y, z_numeric = NULL, z_factor = NULL,
     explain_data, reference_data,
     importance_method, seed = 314
     ) {
@@ -248,12 +248,18 @@ PEAXAI_global_importance <- function(
     train_data  <- as.data.frame(train_data)
     target_data <- as.data.frame(target_data)
 
-    bg_n <- if (!is.null(importance_method[["bg_n"]])) importance_method[["bg_n"]] else 200
+    # bg_n <- if (!is.null(importance_method[["bg_n"]])) importance_method[["bg_n"]] else 200
+
+    if (!is.null(importance_method[["bg_n"]])) {
+      bg_n <- importance_method[["bg_n"]]
+    } else {
+      bg_n <- nrow(train_data)
+    }
 
     shap_model <- kernelshap::kernelshap(
       object = final_model,
       X = target_data,
-      bg_X = train_data,
+      # bg_X = train_data,
       pred_fun = f_pred,
       bg_n = bg_n
     )
@@ -497,8 +503,8 @@ PEAXAI_global_importance <- function(
 #' @export
 
 PEAXAI_local_importance <- function(
-    final_model, x, y, explain_data, reference_data,
-    importance_method, seed = 314
+    final_model, x, y, z_numeric = NULL, z_factor = NULL,
+    explain_data, reference_data, importance_method, seed = 314
 ) {
 
   # reproducibility
@@ -521,18 +527,18 @@ PEAXAI_local_importance <- function(
   }
 
   # format datasets
-  format_dataset <- function(d, x_cols, y_cols) {
+  format_dataset <- function(d, x_cols, y_cols, z_num_cols, z_fac_cols) {
     if (".outcome" %in% names(d)) {
       names(d)[names(d) == ".outcome"] <- "class_efficiency"
       d <- d[, c(setdiff(names(d), "class_efficiency"), "class_efficiency")]
       return(d)
     } else {
-      d <- d[, c(x_cols, y_cols)]
+      d <- d[, c(x_cols, y_cols, z_num_cols, z_fac_cols)]
       return(d)
     }
   }
 
-  target_data <- format_dataset(explain_data, x, y)
+  target_data <- format_dataset(explain_data, x, y, z_numeric, z_factor)
   train_data <- reference_data[,setdiff(names(reference_data), "class_efficiency"), drop = FALSE]
 
   x_len <- length(x)
@@ -591,7 +597,7 @@ PEAXAI_local_importance <- function(
 
     # matrix of data without label
     target_data <- target_data[, setdiff(names(target_data), "class_efficiency"), drop = FALSE]
-    train_data <- train_data[, setdiff(names(train_data), "class_efficiency"), drop = FALSE]
+    train_data <- train_data[, setdiff(names(train_data), c("class_efficiency", ".outcome")), drop = FALSE]
 
     # predict efficiency
     f_pred <- function(object, newdata) {
@@ -604,13 +610,16 @@ PEAXAI_local_importance <- function(
 
     }
 
-    bg_n <- if (!is.null(importance_method[["bg_n"]])) importance_method[["bg_n"]] else 200
+    if (!is.null(importance_method[["bg_n"]])) {
+      bg_n <- importance_method[["bg_n"]]
+    } else {
+      bg_n <- nrow(train_data)
+    }
 
-    #
     shap_model <- kernelshap::kernelshap(
       object = final_model,
       X = target_data,
-      bg_X = train_data,
+      # bg_X = train_data,
       pred_fun = f_pred,
       bg_n = bg_n
     )
@@ -619,6 +628,7 @@ PEAXAI_local_importance <- function(
     imp <- data.frame(
       importance = shap_model$S
     )
+
     names(imp) <- names(train_data)
 
     # Normalize for relative importance per observation

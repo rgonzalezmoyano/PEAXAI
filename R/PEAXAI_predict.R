@@ -9,10 +9,6 @@
 #'
 #' @param data A \code{data.frame} or \code{matrix} containing the variables used
 #'   for prediction.
-#' @param x Integer vector indicating the column indices of input variables in
-#'   \code{data}.
-#' @param y Integer vector indicating the column indices of output variables in
-#'   \code{data}.
 #' @param final_model A fitted \pkg{caret} model provided by PEAXAI_fitting().
 #' @param calibration_model Optional calibration object returned by \code{PEAXAI_fitting()}.
 #'   If \code{NULL}, raw probabilities are returned. If \code{calibration_model$method == "glm.fit"},
@@ -26,17 +22,10 @@
 #' @export
 
 PEAXAI_predict <- function (
-    data, x, y, final_model, calibration_model = NULL
+    data, final_model, calibration_model = NULL
 ) {
 
   data <- as.data.frame(data)
-
-  # reorder index 'x' and 'y' in data
-  data <- data[, c(x,y)]
-  x <- 1:(ncol(data) - length(y))
-  y <- (length(x) + 1):ncol(data)
-
-  names_data <- names(data[,c(x,y)])
 
   name_model <- final_model$method
 

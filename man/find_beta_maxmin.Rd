@@ -8,6 +8,8 @@ find_beta_maxmin(
   data,
   x,
   y,
+  z_numeric = NULL,
+  z_factor = NULL,
   final_model,
   calibration_model,
   efficiency_thresholds,
