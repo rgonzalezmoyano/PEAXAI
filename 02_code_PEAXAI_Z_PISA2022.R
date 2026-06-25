@@ -227,6 +227,8 @@ counterfactuals <- PEAXAI_counterfactuals(
   min_x = 1
 )
 
+save(counterfactuals, file = "counterfactuals.Rdata")
+
 colMeans(data[,5:7])
 colMeans(counterfactuals$`0.75`$counterfactual_dataset[4:6])
 colMeans(counterfactuals$`0.85`$counterfactual_dataset[4:6])
