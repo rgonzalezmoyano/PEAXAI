@@ -4,17 +4,11 @@
 \alias{PEAXAI_predict}
 \title{Predict Probability of Efficiency Using a Fitted Model}
 \usage{
-PEAXAI_predict(data, x, y, final_model, calibration_model = NULL)
+PEAXAI_predict(data, final_model, calibration_model = NULL)
 }
 \arguments{
 \item{data}{A \code{data.frame} or \code{matrix} containing the variables used
 for prediction.}
-
-\item{x}{Integer vector indicating the column indices of input variables in
-\code{data}.}
-
-\item{y}{Integer vector indicating the column indices of output variables in
-\code{data}.}
 
 \item{final_model}{A fitted \pkg{caret} model provided by PEAXAI_fitting().}
 

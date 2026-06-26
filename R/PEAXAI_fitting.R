@@ -371,6 +371,28 @@ PEAXAI_fitting <- function (
     k = trControl[["number"]]
   )
 
+# data[folds$Fold1,]
+
+  # loop control every folds has both clasess
+  for (fold_i in names(folds)) {
+
+    if (all(data[folds[[fold_i]],]$class_efficiency == "efficient") ||
+        all(data[folds[[fold_i]],]$class_efficiency == "not_efficient")) {
+
+      stop(
+        "\nCross-validation is not possible with the specified number of folds.\n\n",
+        "Reason:\n",
+        "  - All folds must contain at least one observation from each class.\n\n",
+        "Recommendation:\n",
+        "  - Reduce the number of folds.\n",
+        call. = FALSE
+      )
+
+    }
+  }
+
+
+
   # performance by fold
   performance_by_fold <- vector("list", length(folds))
   names(performance_by_fold) <- names(folds)
@@ -534,6 +556,7 @@ PEAXAI_fitting <- function (
 
           # raw probabilities
           y_hat_prob <- predict(model_fit, newdata = test_set, type = "prob")[, 1]
+
           if (all(is.na(y_hat_prob))) {
             if (isTRUE(verbose)) {
               warning("Predictions returned NA for method ", method_i, ". Generating NA performance for this configuration.")
@@ -1286,5 +1309,5 @@ PEAXAI_fitting <- function (
 
     return(output_PEAXAI_models)
   }
-browser()
+
 }
