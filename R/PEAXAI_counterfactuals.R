@@ -319,45 +319,45 @@ stop("Not available.")
       stop("Error: The number of rows in relative_importance must be 1 (global) or equal to the number of DMUs in data (local).")
     }
 
-    if (isTRUE(sign)) {
-
-      mat <- directional_vector[["relative_importance"]]
-
-      # Asegurar matriz numérica
-      mat <- as.matrix(mat)
-      storage.mode(mat) <- "numeric"
-
-      # ----------------------------
-      # Columnas x:
-      # positivos -> 0
-      # negativos -> se quedan igual
-      # ----------------------------
-      tmp_x <- mat[, x, drop = FALSE]
-      tmp_x[!is.na(tmp_x) & tmp_x > 0] <- 0
-      mat[, x] <- tmp_x
-
-      # ----------------------------
-      # Columnas y:
-      # positivos -> 0
-      # negativos -> positivos
-      # ----------------------------
-      tmp_y <- mat[, y, drop = FALSE]
-      tmp_y[!is.na(tmp_y) & tmp_y > 0] <- 0
-      tmp_y[!is.na(tmp_y) & tmp_y < 0] <- abs(tmp_y[!is.na(tmp_y) & tmp_y < 0])
-      mat[, y] <- tmp_y
-
-      # ----------------------------
-      # Normalizar por fila
-      # ----------------------------
-      row_totals <- rowSums(abs(mat), na.rm = TRUE)
-
-      mat_rescaled <- mat
-      idx <- row_totals > 0
-
-      mat_rescaled[idx, ] <- mat[idx, , drop = FALSE] / row_totals[idx]
-
-      directional_vector[["relative_importance"]] <- mat_rescaled
-    }
+    # if (isTRUE(sign)) {
+    #
+    #   mat <- directional_vector[["relative_importance"]]
+    #
+    #   # Asegurar matriz numérica
+    #   mat <- as.matrix(mat)
+    #   storage.mode(mat) <- "numeric"
+    #
+    #   # ----------------------------
+    #   # Columnas x:
+    #   # positivos -> 0
+    #   # negativos -> se quedan igual
+    #   # ----------------------------
+    #   tmp_x <- mat[, x, drop = FALSE]
+    #   tmp_x[!is.na(tmp_x) & tmp_x > 0] <- 0
+    #   mat[, x] <- tmp_x
+    #
+    #   # ----------------------------
+    #   # Columnas y:
+    #   # positivos -> 0
+    #   # negativos -> positivos
+    #   # ----------------------------
+    #   tmp_y <- mat[, y, drop = FALSE]
+    #   tmp_y[!is.na(tmp_y) & tmp_y > 0] <- 0
+    #   tmp_y[!is.na(tmp_y) & tmp_y < 0] <- abs(tmp_y[!is.na(tmp_y) & tmp_y < 0])
+    #   mat[, y] <- tmp_y
+    #
+    #   # ----------------------------
+    #   # Normalizar por fila
+    #   # ----------------------------
+    #   row_totals <- rowSums(abs(mat), na.rm = TRUE)
+    #
+    #   mat_rescaled <- mat
+    #   idx <- row_totals > 0
+    #
+    #   mat_rescaled[idx, ] <- mat[idx, , drop = FALSE] / row_totals[idx]
+    #
+    #   directional_vector[["relative_importance"]] <- mat_rescaled
+    # }
 
     # normalize
     if (directional_vector[["baseline"]] == "mean") {

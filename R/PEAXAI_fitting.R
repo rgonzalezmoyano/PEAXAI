@@ -340,7 +340,7 @@ PEAXAI_fitting <- function (
 
   real_balance_stable <- paste0(as.character(round(real_balance, 4)),"*")
 
-  RTS_available <- c("1", "vrs")
+  RTS_available <- c("1", "vrs", "3", "crs")
 
   # ----------------------------------------------------------------------------
   # Step 3.1: Train performance with different hyperparameters -----------------
@@ -371,7 +371,43 @@ PEAXAI_fitting <- function (
     k = trControl[["number"]]
   )
 
-# data[folds$Fold1,]
+  # allow or not continue with low number of units
+
+  # if (length(which(data$class_efficiency == "efficient")) < trControl[["number"]]) {
+  #
+  #   min_class_count <- length(which(data$class_efficiency == "efficient"))
+  #   old_k <-  trControl[["number"]]
+  #   trControl[["number"]] <- length(which(data$class_efficiency == "efficient"))
+  #
+  #   warning(
+  #     "\nThe specified number of folds is not feasible.\n\n",
+  #     "Reason:\n",
+  #     "  - The minority class contains only ", min_class_count, " observations.\n",
+  #     "  - Therefore, ", old_k, "-fold cross-validation may create validation folds with only one class.\n\n",
+  #     "Action:\n",
+  #     "  - Cross-validation will be performed with k = ", trControl[["number"]], " folds instead.\n",
+  #     call. = FALSE
+  #   )
+  #
+  # }
+  #
+  # if (length(which(data$class_efficiency == "not_efficient")) < trControl[["number"]]) {
+  #
+  #   min_class_count <- length(which(data$class_efficiency == "not_efficient"))
+  #   old_k <-  trControl[["number"]]
+  #   trControl[["number"]] <- length(which(data$class_efficiency == "not_efficient"))
+  #
+  #   warning(
+  #     "\nThe specified number of folds is not feasible.\n\n",
+  #     "Reason:\n",
+  #     "  - The minority class contains only ", min_class_count, " observations.\n",
+  #     "  - Therefore, ", old_k, "-fold cross-validation may create validation folds with only one class.\n\n",
+  #     "Action:\n",
+  #     "  - Cross-validation will be performed with k = ", trControl[["number"]], " folds instead.\n",
+  #     call. = FALSE
+  #   )
+  # }
+  #
 
   # loop control every folds has both clasess
   for (fold_i in names(folds)) {
@@ -390,8 +426,6 @@ PEAXAI_fitting <- function (
 
     }
   }
-
-
 
   # performance by fold
   performance_by_fold <- vector("list", length(folds))
@@ -516,6 +550,10 @@ PEAXAI_fitting <- function (
     performance_by_fold_by_grid <- vector("list", length(methods))
     names(performance_by_fold_by_grid) <- names(methods)
 
+    # new
+    calibrating_datasets_by_method <- vector("list", 0)
+    names(performance_by_fold_by_grid) <- names(methods)
+
     for (method_i in names(methods)) {
 
       if (isTRUE(verbose)) message(paste0("Training ", method_i, " method."))
@@ -590,20 +628,22 @@ PEAXAI_fitting <- function (
           # reference
           y_obs <- factor(test_set[, "class_efficiency"], levels = levls)
 
-          # # save calibration test per fold/method/balance/grid
-          # calibration <- cbind(as.data.frame(y_obs), y_hat_prob)
-          # names(calibration) <- c("obs", "efficient")
-          #
-          # # check if Calibration is needed
-          # y_obs_label <- ifelse(y_obs == "efficient", 1,0)
-          #
+          # save calibration test per fold/method/balance/grid
+          calibration <- cbind(as.data.frame(y_obs), y_hat_prob)
+          names(calibration) <- c("obs", "efficient")
+
+          # check if Calibration is needed
+          y_obs_label <- ifelse(y_obs == "efficient", 1,0)
+
           # eps <- 1e-5
           # y_hat_prob <- pmin(pmax(y_hat_prob, eps), 1 - eps)
-          #
-          # calibration$DMU <- test_set_idx
-          #
-          # # store calibration for this fold
-          # calibrating_datasets_by_method[[method_i]][[datasets_to_train_i]][[fold_i]][[grid_i]] <- calibration
+
+          calibration$DMU <- test_set_idx
+
+          # store calibration for this fold
+          # creo que no se guarda bien
+          browser()
+          calibrating_datasets_by_method[[method_i]][[datasets_to_train_i]][[fold_i]][[grid_i]] <- calibration
 
           # confusion matrix
           cm <- confusionMatrix(
@@ -828,8 +868,8 @@ PEAXAI_fitting <- function (
   save_best_model_fit <- vector("list", length = length(methods))
   names(save_best_model_fit) <- names(methods)
 
-  save_calibration_model <- vector("list", length(methods))
-  names(save_calibration_model) <- names(methods)
+  # save_calibration_model <- vector("list", length(methods))
+  # names(save_calibration_model) <- names(methods)
 
   for (method_i in names(methods)) {
 
@@ -1277,6 +1317,10 @@ PEAXAI_fitting <- function (
     } # end hold out
 
   } # end method
+
+  # prepare calibration analysis
+  browser()
+  calibrating_datasets_by_method
 
   # show results without hold out
   if(is.null(hold_out)) {
